@@ -4,6 +4,11 @@ Ein Retrieval-Augmented-Generation-System, das Fragen zur Bedienung der
 FEA-Software Abaqus auf Basis der offiziellen PDF-Handbücher beantwortet —
 mit Seiten-genauem Source-Tracking und Terminal-Chat.
 
+**Interaktives Vergleichs-Dashboard** (alle 6 RAGAS-Studien, Parser ×
+Chunking × Embedding × Retrieval × LLM × Best-of-Breed, mit Diagrammen und
+Rohdaten-Tabellen): [`docs/dashboard.html`](docs/dashboard.html) — lokal
+herunterladen und im Browser öffnen, keine Installation nötig.
+
 Ausführliche technische Dokumentation (Architektur, Designentscheidungen,
 Verifikationsergebnisse): [`docs/DOKUMENTATION.md`](docs/DOKUMENTATION.md)
 
