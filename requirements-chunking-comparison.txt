@@ -1,0 +1,18 @@
+# Zusätzliche Abhängigkeit NUR für die "semantic"-Chunking-Strategie im
+# Chunking-Vergleich (scripts/build_chunking_demo_corpus.py,
+# scripts/evaluate_chunking_ragas.py). Nicht für den normalen Betrieb der
+# App nötig (siehe requirements.txt).
+#
+# Installation: pip install -r requirements-chunking-comparison.txt
+#
+# Hinweis: tiktoken (für die "token_based"-Strategie) ist bereits eine
+# transitive Abhängigkeit von langchain-openai und muss nicht separat
+# installiert werden.
+#
+# Hinweis: langchain-experimental (und dessen Abhängigkeit
+# langchain-community) sind laut Upstream im Sunsetting-Modus und erzeugen
+# einen DeprecationWarning beim Import von SemanticChunker. Funktional
+# unproblematisch (siehe tests/test_chunking_backends.py), aber ein Kandidat
+# für spätere Migration auf eine eigenständige Nachfolge-Implementierung.
+
+langchain-experimental>=0.3.0

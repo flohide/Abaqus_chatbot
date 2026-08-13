@@ -1,0 +1,16 @@
+# Zusätzliche Abhängigkeiten NUR für die vier HuggingFace-Embedding-Modelle
+# im Embedding-Vergleich (scripts/build_embedding_demo_corpus.py,
+# scripts/evaluate_embedding_ragas.py). Die drei OpenAI-Modelle brauchen
+# nichts zusätzlich. Nicht für den normalen Betrieb der App nötig (siehe
+# requirements.txt).
+#
+# Installation: pip install -r requirements-embedding-comparison.txt
+#
+# Läuft vollständig lokal (kein API-Key nötig) - die Modellgewichte werden
+# beim ersten Aufruf über den HuggingFace Hub heruntergeladen und lokal
+# gecacht (je nach Modell mehrere hundert MB bis ~2 GB, siehe
+# docs/EMBEDDING.md).
+
+sentence-transformers>=3.0.0
+langchain-huggingface>=0.1.0
+torch>=2.0.0

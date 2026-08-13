@@ -1,0 +1,31 @@
+# LangChain Ökosystem
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-mistralai>=0.2.0
+langchain-community>=0.3.0
+langchain-chroma>=0.1.4
+langchain-text-splitters>=0.3.0
+
+# Vektor-DB
+chromadb>=0.5.0
+
+# PDF-Parsing (Markdown-Export inkl. Tabellen/Layout/Seiten-Metadaten)
+pymupdf4llm>=0.0.17
+
+# Config & Utilities
+pydantic-settings>=2.4.0
+python-dotenv>=1.0.1
+rich>=13.7.0
+
+# Web-Frontend
+streamlit>=1.38.0
+
+# Tests
+pytest>=8.0.0
+
+# Für den Aufbau des Parser-Vergleichs-Demo-Korpus (nur einmalig zur
+# Ingestion nötig, nicht für den Betrieb der App): siehe
+# requirements-parser-comparison.txt
+
+# Für die RAGAS-Evaluation (scripts/evaluate_ragas.py), nicht für den
+# normalen Betrieb der App nötig: siehe requirements-eval.txt

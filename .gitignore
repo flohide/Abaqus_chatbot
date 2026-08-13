@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+vectorstore/
+vectorstore_parser_demo/
+vectorstore_chunking_demo/
+vectorstore_embedding_demo/
+vectorstore_full_custom/
+data/raw_pdfs/*.pdf
+data/parser_demo_pdfs/*.pdf
+.DS_Store
+.pytest_cache/
+*.egg-info/
+eval_results/
+.ragas_cache/
+.claude/settings.local.json
