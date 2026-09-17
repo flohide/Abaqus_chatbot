@@ -2,16 +2,21 @@ __pycache__/
 *.pyc
 .venv/
 .env
+# vectorstore/ und vectorstore_full_custom/ (Produktiv- bzw.
+# Best-of-Breed-Collection, siehe app.py::PIPELINES) sind zu groß fuer
+# GitHub (der HNSW-Index von vectorstore/ allein ist ~295 MB, GitHubs
+# Hard-Limit liegt bei 100 MB pro Datei) - deshalb hier bewusst ignoriert,
+# siehe README.md "Setup" fuer den eigenen Ingestion-Lauf.
 vectorstore/
+vectorstore_full_custom/
 vectorstore_parser_demo/
 vectorstore_chunking_demo/
 vectorstore_embedding_demo/
-vectorstore_full_custom/
-data/raw_pdfs/*.pdf
 data/parser_demo_pdfs/*.pdf
 .DS_Store
 .pytest_cache/
 *.egg-info/
 eval_results/
 .ragas_cache/
+.ragas_cache_*/
 .claude/settings.local.json

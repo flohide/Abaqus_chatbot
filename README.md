@@ -4,10 +4,6 @@ Ein Retrieval-Augmented-Generation-System, das Fragen zur Bedienung der
 FEA-Software Abaqus auf Basis der offiziellen PDF-Handbücher beantwortet —
 mit Seiten-genauem Source-Tracking und Terminal-Chat.
 
-**Projektpräsentation für die Abgabe** (Architektur, alle getesteten
-Varianten, RAGAS-Metriken erklärt, Gesamtergebnis):
-[`docs/PRAESENTATION.md`](docs/PRAESENTATION.md)
-
 **Interaktives Vergleichs-Dashboard** (alle 6 RAGAS-Studien, Parser ×
 Chunking × Embedding × Retrieval × LLM × Best-of-Breed, mit Diagrammen und
 Rohdaten-Tabellen): [`docs/dashboard.html`](docs/dashboard.html) — lokal
@@ -32,28 +28,20 @@ vs. BM25-Hybrid) inkl. RAGAS-Evaluation: [`docs/RETRIEVAL.md`](docs/RETRIEVAL.md
 Best-of-Breed: Kombination der vier Einzelsieger gegen die
 Produktiv-Baseline: [`docs/BEST_OF_BREED.md`](docs/BEST_OF_BREED.md)
 
-Antwort-LLM-Vergleich (OpenAI vs. Mistral vs. Qwen2.5-32B, kostenlos über
-denselben Hub) inkl. RAGAS-Evaluation: [`docs/LLM.md`](docs/LLM.md)
+Antwort-LLM-Vergleich (OpenAI-mini vs. Mistral vs. GPT-4o, über denselben
+Hub wie OpenAI) inkl. RAGAS-Evaluation: [`docs/LLM.md`](docs/LLM.md)
 
-Quantitative RAGAS-Evaluation (4 Parser × 2 LLMs, 5 Metriken, 480 Scores):
-[`docs/EVALUATION.md`](docs/EVALUATION.md)
+Quantitative RAGAS-Evaluation (4 Parser, Antwort-LLM fest `gpt-4o-mini`,
+5 Metriken, 240 Scores): [`docs/PARSER.md`](docs/PARSER.md) (Framework/Metriken/
+Code-Einsatz: [`docs/RAGAS.md`](docs/RAGAS.md))
 
 ## Architekturentscheidungen
 
 | Bereich | Wahl | Begründung |
 |---|---|---|
 | Vektor-DB | [Chroma](https://www.trychroma.com/) (lokal, persistent) | Keine Server-Infrastruktur nötig, gute LangChain-Integration, Metadaten-Filterung möglich. |
-| PDF-Parser | [PyMuPDF4LLM](https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/) | Wandelt PDFs seitenweise in Markdown um und erhält dabei Überschriften, Tabellen und Seitenzahlen — ideal für strukturierte Handbücher. |
-| Chunking | Markdown-Header-Splitting + Recursive-Splitting (Hybrid) | Hält zusammengehörige Abschnitte (Kapitel/Unterkapitel) zusammen; nur überlange Abschnitte werden zusätzlich zeichenbasiert gesplittet. |
-| Embeddings | `text-embedding-3-small` | Guter Kompromiss aus Kosten und Qualität. |
-| LLM | `gpt-4o-mini` (konfigurierbar) | Günstig, schnell, für Handbuch-Q&A ausreichend präzise. |
-| RAG-Kette | Reine [LCEL](https://python.langchain.com/docs/concepts/lcel/)-Runnables | LangChain ≥1.0 hat `langchain.chains` (`create_retrieval_chain` etc.) entfernt; die Kette wird hier transparent aus Runnables zusammengesetzt statt einen Compat-Layer zu nutzen. |
-| Retrieval | MMR (Max Marginal Relevance), k=5 | Reduziert redundante Chunks aus derselben Seite/Sektion. |
 | Memory | Einfache Nachrichtenliste in der Chat-Session | Ausreichend für ein Single-User-Tool, kein Session-Store nötig. |
-| Frontend | [Streamlit](https://streamlit.io/) (`st.chat_message`/`st.chat_input`) | Klassische Chat-Optik mit wenig Code, Sidebar für Dropdown-Steuerung (LLM/Wissensbasis). |
-| LLM-Vergleich | `ChatOpenAI` (Hub) vs. `ChatMistralAI` austauschbar | Gleiche RAG-Kette, gleiche Wissensbasis, nur das LLM wechselt — sauberer Vergleich der Antwortqualität zweier Modelle. |
-| Parser-Vergleich | 4 separate Chroma-Collections auf ~50-Seiten-Demo-Korpus | Docling/Unstructured sind 70–130× langsamer als PyMuPDF4LLM (siehe `docs/PARSER.md`) — voller Korpus für alle 4 Parser wäre nicht praktikabel; Demo-Korpus macht den Vergleich trotzdem live im Frontend möglich. |
-
+| Frontend | [Streamlit](https://streamlit.io/) (`st.chat_message`/`st.chat_input`) | Klassische Chat-Optik mit wenig Code, Sidebar mit Radio-Button zur Pipeline-Auswahl (Produktiv/Best-of-Breed). |
 ## Projektstruktur
 
 ```
@@ -85,7 +73,7 @@ Abaqus_chatbot/
 │   │   │   └── semantic_backend.py
 │   │   ├── embedding_demo.py         # Demo-Korpus-Aufbau für Embedding-Modell-Vergleich
 │   │   ├── embedding_models.py       # 7 Embedding-Modelle: 3 OpenAI + 4 HF lokal (siehe docs/EMBEDDING.md)
-│   │   └── custom_demo.py            # app.py-Sidebar: beliebige Parser×Chunking×Embedding-Kombination auflösen/on-demand bauen
+│   │   └── custom_demo.py            # Parser×Chunking×Embedding-Kombination auflösen/on-demand bauen (u.a. von app.py::PIPELINES genutzt)
 │   ├── rag/                          # Retrieval + LCEL-Kette
 │   │   ├── vectorstore.py
 │   │   ├── retriever.py              # Produktiv-Retriever (MMR)
@@ -93,10 +81,10 @@ Abaqus_chatbot/
 │   │   ├── prompts.py
 │   │   ├── chain.py
 │   │   └── llms.py                   # LLM-Provider-Auswahl (OpenAI/Mistral)
-│   ├── eval/                         # RAGAS-Evaluation (siehe docs/EVALUATION.md, docs/CHUNKING.md)
+│   ├── eval/                         # RAGAS-Evaluation (siehe docs/RAGAS.md, docs/CHUNKING.md)
 │   │   ├── _ragas_compat.py          # Kompatibilitäts-Stub für ragas + LangChain >=1.0
 │   │   ├── dataset.py                # 12 Eval-Fragen + Referenzantworten
-│   │   ├── metrics.py                # 5 RAGAS-Metriken, fester OpenAI-Richter
+│   │   ├── metrics.py                # 5 RAGAS-Metriken, Richter je Studie: gpt-4o-mini oder Claude Sonnet 5
 │   │   └── run.py                    # Orchestriert alle vier Vergleichs-Matrizen
 │   ├── citations.py                  # Klickbare file://-Links zu Original-PDFs
 │   └── cli/
@@ -143,18 +131,37 @@ LLM_MODEL=openai/gpt-4o-mini
 EMBEDDING_MODEL=openai/text-embedding-3-small
 ```
 
-Für den LLM-Vergleich im Frontend optional einen Mistral-Key ergänzen
-(kostenloser Tier: https://console.mistral.ai/) — ohne Key ist die
-Mistral-Option im Frontend deaktiviert:
+Für Mistral als Antwort-LLM in den Vergleichsstudien (nicht für die
+Chat-App selbst nötig, siehe `docs/LLM.md`, `docs/BEST_OF_BREED.md`)
+optional einen Mistral-Key ergänzen (kostenloser Tier:
+https://console.mistral.ai/):
 
 ```bash
 MISTRAL_API_KEY=...
 MISTRAL_MODEL=mistral-small-latest
 ```
 
+> **Für Gutachter/innen:** Die fertig gebauten Vectorstore-Collections
+> (`vectorstore/`, `vectorstore_full_custom/`) sind **nicht** Teil dieses
+> Repos — ihr HNSW-Index allein ist ~295 MB bzw. ~99 MB groß und würde
+> GitHubs 100-MB-Datei-Limit sprengen. Die Quell-PDFs (`data/raw_pdfs/`,
+> zusammen ~52 MB) sind dagegen enthalten. Einmalig `python
+> scripts/ingest.py` laufen lassen (siehe "Nutzung" unten, ~13 Min.), dann
+> ist die **Produktiv**-Pipeline (Terminal-Chat und Web-Frontend) nutzbar.
+>
+> ⚠️ Die **Best-of-Breed**-Pipeline im Web-Frontend braucht zusätzlich
+> `vectorstore_full_custom/` — dafür gibt es kein schnelles Setup-Skript.
+> Wird sie im Frontend ausgewählt, ohne dass die Collection existiert, baut
+> `app.py` sie beim ersten Aufruf automatisch, aber das dauert wegen
+> Unstructured `hi_res` auf ~5.100 Seiten **ca. 5 Stunden** (siehe
+> `docs/PARSER.md`) — kein Hänger/Bug, sondern der erwartete Einmal-Build.
+> Für eine schnelle Durchsicht empfiehlt sich die Produktiv-Pipeline.
+
 ## Nutzung
 
-1. Wissensbasis aufbauen (einmalig, bzw. erneut bei geänderten PDFs in `data/raw_pdfs/`):
+1. Wissensbasis aufbauen — **einmalig nötig** (die Produktiv-Collection ist
+   nicht Teil des Repos, siehe oben), danach nur erneut bei geänderten
+   PDFs in `data/raw_pdfs/`:
 
    ```bash
    python scripts/ingest.py
@@ -174,33 +181,34 @@ MISTRAL_MODEL=mistral-small-latest
    streamlit run app.py
    ```
 
-   Sidebar erlaubt fünf unabhängige Auswahlmöglichkeiten: **Parser** (4),
-   **Chunking** (6), **Embedding** (7), **Retrieval-Strategie** (4,
-   orthogonal, siehe `docs/RETRIEVAL.md`) und **Antwort-LLM** (3, siehe
-   `docs/LLM.md`) — zusammen 2.016 frei kombinierbare Konfigurationen. Ein
-   Umschalter wählt zwischen dem vollen ~5.100-Seiten-Produktivkorpus und
-   dem ~53-Seiten-Demo-Korpus — Parser/Chunking/Embedding sind in **beiden**
-   Modi frei wählbar. Für bereits getestete Kombinationen (siehe
-   docs/PARSER.md, docs/CHUNKING.md, docs/EMBEDDING.md,
-   docs/BEST_OF_BREED.md) wird die passende Collection direkt
-   wiederverwendet; neue, noch nie getestete Kombinationen baut die App beim
-   ersten Absenden einer Frage einmalig selbst
-   (`ingestion/custom_demo.py::resolve_collection()`) — mit einer live
-   berechneten Bauzeit-Schätzung in der Sidebar
-   (`estimate_build_seconds()`), bevor der Build startet: auf dem
-   Demo-Korpus meist unter einer Minute bis wenige Minuten, auf dem vollen
-   Korpus je nach Parser von ~15 Minuten (PyMuPDF4LLM/pdfplumber) bis über
-   30 Stunden (Docling — die Sidebar zeigt ab ~30 Min. geschätzter Bauzeit
-   eine eskalierte Warnung). Der Parse-Schritt (bei Docling/Unstructured auf
-   dem vollen Korpus der dominante Kostenfaktor) wird pro Sitzung
-   Parser-weise gecacht — ein Parser-Wechsel wird also nur einmal bezahlt,
-   selbst wenn danach mehrere Chunking-/Embedding-Varianten mit demselben
-   Parser ausprobiert werden.
+   Sidebar bietet ein einziges Auswahlfeld: die **Pipeline** (Radio,
+   `app.py::PIPELINES`). Zur Auswahl stehen genau zwei fest definierte
+   Gesamt-Pipelines, beide auf dem vollen ~5.100-Seiten-Produktivkorpus:
 
-## Parser-Vergleich im Frontend
+   - **Produktiv** — PyMuPDF4LLM + Header+Recursive 800 +
+     `text-embedding-3-small` + MMR + `gpt-4o-mini`.
+   - **Best-of-Breed** — Unstructured + Semantic Chunking +
+     `text-embedding-3-large` + Rerank + GPT-4o (siehe `docs/BEST_OF_BREED.md`).
 
-Um die im Frontend wählbaren Parser-Vergleichs-Collections zu befüllen,
-zusätzlich die schweren Parser-Abhängigkeiten installieren und den
+   Beide laden ihre Collection über `resolve_collection()`: Produktiv nach
+   `python scripts/ingest.py` sofort verfügbar, Best-of-Breed baut sich beim
+   ersten Aufruf automatisch selbst (ca. 5 Std., siehe Hinweis oben unter
+   "Für Gutachter/innen"). Das Antwort-LLM ist pipeline-fest vorgegeben
+   (`gpt-4o-mini` bei Produktiv, GPT-4o bei Best-of-Breed, begründet durch
+   den Befund aus `docs/BEST_OF_BREED.md`) und **nicht** separat umschaltbar
+   — anders als in einer früheren Version der App gibt es kein eigenes
+   LLM-Dropdown mehr. Der freie Wechsel zwischen den drei Antwort-LLMs
+   (OpenAI-mini, GPT-4o, Mistral) findet ausschließlich in der
+   RAGAS-Studie statt, siehe `docs/LLM.md`. Die einzelnen
+   Demo-Korpus-Vergleichsstudien (Parser/Chunking/Embedding/Retrieval, siehe
+   unten) sind über die App ebenfalls **nicht** live auswählbar — sie laufen
+   ausschließlich über die jeweiligen `scripts/evaluate_*_ragas.py`-Skripte
+   bzw. das `docs/dashboard.html`.
+
+## Parser-Vergleich (Demo-Korpus für die RAGAS-Studie)
+
+Um die Parser-Vergleichs-Collections für `scripts/evaluate_ragas.py` zu
+befüllen, zusätzlich die schweren Parser-Abhängigkeiten installieren und den
 ~50-Seiten-Demo-Korpus einmalig einlesen (siehe auch `docs/PARSER.md`):
 
 ```bash
@@ -209,10 +217,10 @@ python scripts/build_parser_demo_corpus.py          # alle 4 Parser (Docling/Uns
 python scripts/build_parser_demo_corpus.py pymupdf4llm pdfplumber   # nur die schnellen Parser
 ```
 
-## Chunking-Vergleich im Frontend
+## Chunking-Vergleich (Demo-Korpus für die RAGAS-Studie)
 
-Um die im Frontend wählbaren Chunking-Vergleichs-Collections zu befüllen
-(Parser fix: PyMuPDF4LLM, siehe auch `docs/CHUNKING.md`):
+Um die Chunking-Vergleichs-Collections für `scripts/evaluate_chunking_ragas.py`
+zu befüllen (Parser fix: PyMuPDF4LLM, siehe auch `docs/CHUNKING.md`):
 
 ```bash
 pip install -r requirements-chunking-comparison.txt   # nur für die "semantic"-Strategie nötig
@@ -220,11 +228,12 @@ python scripts/build_chunking_demo_corpus.py                          # alle 6 S
 python scripts/build_chunking_demo_corpus.py header_recursive_800 semantic   # Auswahl
 ```
 
-## Embedding-Modell-Vergleich im Frontend
+## Embedding-Modell-Vergleich (Demo-Korpus für die RAGAS-Studie)
 
-Um die im Frontend wählbaren Embedding-Modell-Vergleichs-Collections zu
-befüllen (Parser/Chunking fix: PyMuPDF4LLM/Header+Recursive 800, siehe auch
-`docs/EMBEDDING.md`). Die 4 lokalen HuggingFace-Modelle brauchen zusätzlich
+Um die Embedding-Modell-Vergleichs-Collections für
+`scripts/evaluate_embedding_ragas.py` zu befüllen (Parser/Chunking fix:
+PyMuPDF4LLM/Header+Recursive 800, siehe auch `docs/EMBEDDING.md`). Die 4
+lokalen HuggingFace-Modelle brauchen zusätzlich
 `requirements-embedding-comparison.txt` (kein API-Key, aber Download der
 Modellgewichte beim ersten Aufruf):
 
@@ -234,25 +243,22 @@ python scripts/build_embedding_demo_corpus.py                                  #
 python scripts/build_embedding_demo_corpus.py text-embedding-3-small multilingual-e5-large   # Auswahl
 ```
 
-## Retrieval-Vergleich im Frontend
+## Retrieval-Vergleich (für die RAGAS-Studie)
 
 Braucht **keinen eigenen Demo-Korpus** — Retrieval-Strategien wirken nur zur
 Query-Zeit auf der bereits vorhandenen Chunking-Demo-Collection (siehe auch
-`docs/RETRIEVAL.md`). Für "Rerank"/"Hybrid" zusätzlich installieren:
-
-```bash
-pip install -r requirements-retrieval-comparison.txt
-```
+`docs/RETRIEVAL.md`). "Rerank"/"Hybrid" brauchen `rank_bm25`/
+`sentence-transformers`, die bereits Teil von `requirements.txt` sind.
 
 ## Quantitative Evaluation (RAGAS)
 
-Bewertet alle 4 Parser × 2 LLMs (8 Kombinationen), alle 6 Chunking-Strategien
-× 2 LLMs (12 Kombinationen), alle 7 Embedding-Modelle × 2 LLMs (14
-Kombinationen) sowie alle 4 Retrieval-Strategien × 2 LLMs (8 Kombinationen)
+Bewertet alle 4 Parser, alle 6 Chunking-Strategien, alle 7 Embedding-Modelle
+sowie alle 4 Retrieval-Strategien (Antwort-LLM jeweils fest auf
+`gpt-4o-mini`, der eigentliche LLM-Vergleich läuft separat, siehe unten)
 auf demselben Demo-Korpus mit einem festen Fragenset und 5 RAGAS-Metriken
 (Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall,
 FactualCorrectness). Details und Ergebnisse:
-[`docs/EVALUATION.md`](docs/EVALUATION.md) (Parser),
+[`docs/PARSER.md`](docs/PARSER.md) (Parser, siehe auch [`docs/RAGAS.md`](docs/RAGAS.md)),
 [`docs/CHUNKING.md`](docs/CHUNKING.md) (Chunking),
 [`docs/EMBEDDING.md`](docs/EMBEDDING.md) (Embedding-Modell) und
 [`docs/RETRIEVAL.md`](docs/RETRIEVAL.md) (Retrieval-Strategie).
@@ -271,7 +277,6 @@ python scripts/build_embedding_demo_corpus.py    # falls noch nicht geschehen
 python scripts/evaluate_embedding_ragas.py
 
 # Retrieval-Vergleich (Parser/Chunking/Embedding fix, kein Demo-Korpus-Build nötig):
-pip install -r requirements-retrieval-comparison.txt
 python scripts/evaluate_retrieval_ragas.py
 ```
 
