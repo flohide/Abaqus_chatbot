@@ -3,14 +3,13 @@
 
 Bewertet Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall und
 FactualCorrectness auf dem ~53-Seiten-Demo-Korpus (identisches Fragenset für
-alle 8 Kombinationen, siehe docs/EVALUATION.md).
+alle 8 Kombinationen, siehe docs/PARSER.md, Framework-Hintergrund in docs/RAGAS.md).
 
 Richter-LLM ist für alle Kombinationen fest OpenAI (siehe eval/metrics.py)
 — vermeidet Self-Preference-Bias beim Modellvergleich.
 
 Voraussetzung: die 4 Parser-Demo-Collections müssen bereits existieren
-(python scripts/build_parser_demo_corpus.py) und MISTRAL_API_KEY muss in
-.env gesetzt sein.
+(python scripts/build_parser_demo_corpus.py).
 
 Nutzung:
     python scripts/evaluate_ragas.py                              # volle Matrix

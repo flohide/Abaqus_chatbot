@@ -65,30 +65,32 @@ Beide Phasen sind vollständig entkoppelt: Die Ingestion läuft einmalig über
 
 ## 3. Tech-Stack & Designentscheidungen
 
+Zwei Kategorien: fest verdrahtete Architekturentscheidungen ohne evaluierte
+Alternative (3.1) und Pipeline-Komponenten, die austauschbar sind und einzeln
+per RAGAS gegen Alternativen evaluiert wurden (3.2, Details in Abschnitt 12).
+
+### 3.1 Feste Designentscheidungen
+
 | Bereich | Wahl | Begründung |
 |---|---|---|
 | **Vektor-DB** | Chroma (lokal, persistent, SQLite-basiert) | Kein Serverbetrieb nötig, native LangChain-Integration, unterstützt Metadaten-Filter. FAISS bietet keine native Metadaten-Filterung; Qdrant/LanceDB wären für den Umfang dieses Projekts unnötiger Infra-Overhead. |
-| **PDF-Parser** | PyMuPDF4LLM (`pymupdf4llm.to_markdown`) | Konvertiert jede Seite in Markdown und erhält dabei Überschriften-Hierarchie und Tabellen (als Markdown-Tabellen). Das ist entscheidend für Handbücher: Kapitel-/Abschnittsstruktur bleibt maschinenlesbar erhalten, statt in einem einzigen Fließtext verloren zu gehen. Fällt bei Bild-/Scan-Seiten automatisch auf Tesseract-OCR zurück. |
-| **Chunking** | Hybrid: `MarkdownHeaderTextSplitter` + `RecursiveCharacterTextSplitter` als Fallback | Abschnitte (`#`/`##`/`###`) bleiben zusammenhängend, statt an willkürlichen Zeichengrenzen zu zerreißen. Nur Abschnitte, die trotzdem länger als `CHUNK_SIZE` sind, werden zusätzlich rekursiv gesplittet. Reines Embedding-basiertes "Semantic Chunking" wurde ursprünglich als unnötig teuer verworfen — mittlerweile empirisch gegen 5 weitere Chunking-Strategien geprüft, siehe [`docs/CHUNKING.md`](CHUNKING.md). |
-| **Embeddings** | `text-embedding-3-small` | Guter Kompromiss aus Kosten und Retrieval-Qualität für technischen Text; empirisch gegen `-3-large` und `ada-002` geprüft, siehe [`docs/EMBEDDING.md`](EMBEDDING.md). |
-| **LLM** | `gpt-4o-mini` (konfigurierbar) | Günstig, schnell, für Handbuch-Q&A ausreichend präzise; austauschbar über `.env`. |
 | **RAG-Orchestrierung** | Reine [LCEL](https://python.langchain.com/docs/concepts/lcel/)-Runnables (kein `langchain.chains`) | Die installierte LangChain-Version (≥1.0) hat das klassische `langchain.chains`-Modul — inkl. `create_retrieval_chain` / `create_history_aware_retriever` — vollständig entfernt und die Bibliothek auf einen Agent-zentrierten Ansatz (`langchain.agents.create_agent`) umgebaut. Statt eines veralteten Compat-Layers (`langchain-classic`) wird die Kette hier transparent aus einzelnen `Runnable`-Bausteinen zusammengesetzt — näher am eigentlichen LCEL-Paradigma und mit voller Kontrolle über das Source-Tracking. |
-| **Retrieval-Strategie** | MMR (Max Marginal Relevance), `k=5`, `fetch_k=20` | Reduziert redundante Chunks, die aus derselben Seite/demselben Abschnitt stammen, zugunsten thematisch diverserer Kontextabdeckung. |
 | **Conversation Memory** | Einfache Nachrichtenliste (`list[BaseMessage]`) innerhalb der CLI-Session | Für ein Single-User-Terminal-Tool ausreichend; der für Multi-User-/Webanwendungen gedachte `RunnableWithMessageHistory`-Session-Store wäre hier unnötige Komplexität. |
 | **Config-Management** | `pydantic-settings` | Typsichere, validierte Konfiguration aus `.env`; verhindert stille Fehlkonfiguration (z. B. fehlender API-Key wird sofort beim Start als Validierungsfehler sichtbar, nicht erst beim ersten API-Call). |
 | **Terminal-UI** | `rich` | Markdown-Rendering der Antworten, Spinner während des Retrievals, farbige/strukturierte Ausgabe ohne zusätzliches Web-Framework. |
 
-### 3.1 Evaluierte Alternative: Docling, pdfplumber & Unstructured als PDF-Parser
+### 3.2 Austauschbare Pipeline-Komponenten
 
-Neben PyMuPDF4LLM wurden drei weitere gängige Parser-Kandidaten
-(**Docling**, **pdfplumber**, **Unstructured**, jeweils inkl. der
-tabellenfokussierten Modi) empirisch am selben Seitenausschnitt getestet.
-Ergebnis: PyMuPDF4LLM war sowohl **bis zu 127× schneller** als auch bei den
-getesteten linienlosen Tabellen **inhaltlich präziser** als alle drei
-Alternativen — Docling und Unstructured `hi_res` verloren dabei sogar
-Tabellenstruktur bzw. lieferten OCR-verstümmelten Zellinhalt. Vollständiger
-Vergleich mit Messwerten und Beispiel-Outputs:
-[`docs/PARSER.md`](PARSER.md).
+| Komponente | Produktiv-Default | Vergleich |
+|---|---|---|
+| **PDF-Parser** | PyMuPDF4LLM | 4 Parser (inkl. Docling, pdfplumber, Unstructured) per RAGAS verglichen — [`docs/PARSER.md`](PARSER.md), Abschnitt 12.2–12.3 |
+| **Chunking** | Header+Recursive 800 | 6 Strategien verglichen, u. a. Semantic Chunking — [`docs/CHUNKING.md`](CHUNKING.md), Abschnitt 12.4 |
+| **Embeddings** | `text-embedding-3-small` | 7 Modelle verglichen (3 OpenAI + 4 lokal) — [`docs/EMBEDDING.md`](EMBEDDING.md), Abschnitt 12.5 |
+| **Retrieval-Strategie** | MMR (`k=5`, `fetch_k=20`) | 4 Strategien verglichen (Similarity, Rerank, BM25-Hybrid) — [`docs/RETRIEVAL.md`](RETRIEVAL.md), Abschnitt 12.6 |
+| **Antwort-LLM** | `gpt-4o-mini` | 3 Modelle verglichen (OpenAI-mini, GPT-4o, Mistral) — [`docs/LLM.md`](LLM.md), Abschnitt 12.8 |
+
+Die Kombination der fünf Einzelsieger gegen die Produktiv-Baseline:
+[`docs/BEST_OF_BREED.md`](BEST_OF_BREED.md), Abschnitt 12.7.
 
 ## 4. Ingestion-Pipeline
 
@@ -105,10 +107,13 @@ def load_pdf(pdf_path: Path) -> list[PageDocument]:
         for page in pages:
             if not page["text"].strip():
                 continue
-            pdf_index = page["metadata"]["page_number"] - 1  # 0-basiert für PyMuPDF
-            printed_label = doc[pdf_index].get_label() or str(page["metadata"]["page_number"])
+            pdf_index_1based = page["metadata"]["page_number"]
+            printed_label = doc[pdf_index_1based - 1].get_label() or str(pdf_index_1based)
             result.append(
-                PageDocument(text=page["text"], source_file=pdf_path.name, page_number=printed_label)
+                PageDocument(
+                    text=page["text"], source_file=pdf_path.name,
+                    page_number=printed_label, pdf_page_index=pdf_index_1based,
+                )
             )
         return result
     finally:
@@ -130,6 +135,10 @@ def load_pdf(pdf_path: Path) -> list[PageDocument]:
   `page_number` als `str` statt `int` typisiert. Fehlen `/PageLabels` in
   einem PDF (nicht der Fall bei den getesteten Handbüchern), fällt der
   Loader auf die sequenzielle Position zurück.
+- Zusätzlich zum gedruckten Label führt jedes `PageDocument` die
+  **physische** PDF-Position (`pdf_page_index`, 1-basiert) parallel mit —
+  nötig für die klickbaren Quellen-Links, die auf die tatsächliche
+  Datei-Position statt das gedruckte Label zeigen müssen (siehe 5.4).
 - Enthält eine Seite Scan-/Bildinhalt statt echten Text, greift PyMuPDF4LLM
   automatisch auf **Tesseract-OCR** zurück (in den Logs sichtbar als
   `OCR on page.number=...`). Das war bei der Ingestion der beiden Test-Handbücher
@@ -149,12 +158,13 @@ Zweistufiger Ablauf pro Seite:
    (`chunk_overlap=150`, Separator-Priorität `\n\n → \n → ". " → " "`)
    in kleinere, überlappende Teile zerlegt.
 
-Jeder finale Chunk erhält drei Metadaten-Felder:
+Jeder finale Chunk erhält vier Metadaten-Felder:
 
 ```python
 {
     "source_file": "Abaqus2017_GETTINGSTARTED.pdf",
     "page_number": "1059",
+    "pdf_page_index": 1061,
     "section": "Getting Started with Abaqus > Creating a Model > Boundary Conditions",
 }
 ```
@@ -164,11 +174,22 @@ gebaut (`_section_path()`). Diese Metadaten fließen direkt in die
 Kontext-Formatierung der Answer-Chain (siehe 5.3) und in die
 Quellenanzeige der CLI (siehe 6).
 
-**Trade-off:** Da pro *Seite* gesplittet wird, kann eine Sektion, die über
-eine Seitengrenze hinausläuft, in zwei Chunks mit unterschiedlicher
-`page_number` landen. Für den gegebenen Anwendungsfall (präzise
-Seitenangabe wichtiger als 100 % lückenlose Abschnittserkennung) ist das
-ein akzeptabler Kompromiss.
+**Seitenübergreifende Abschnitte:** Der `MarkdownHeaderTextSplitter` läuft
+zwar weiterhin pro Seite, aber ein Abschnitt, der ohne neue Überschrift auf
+der Folgeseite fortgesetzt wird, wird vor dem eigentlichen Chunking mit dem
+letzten Abschnitt der Vorseite zusammengeführt (`_merge_page_boundary_continuations()`).
+Kriterium: der erste Header-Abschnitt der Folgeseite trägt keine
+Header-Metadaten (= keine Überschrift vor diesem Inhalt) und die Seite
+folgt physisch direkt auf die vorige, bereits erfasste Seite derselben
+Quelldatei — eine zwischen Ingestion-Lauf und Loader bereits herausgefilterte
+Leerseite (Sprung in `pdf_page_index`) verhindert die Zusammenführung
+bewusst. `page_number` wird für solche Chunks zu einem Bereich (z. B.
+"1059-1060"), der PDF-Deep-Link (`pdf_page_index`) zeigt auf die Startseite.
+**Verbleibende Einschränkung:** Liegt die für eine Antwort relevante
+Textstelle näher am Ende eines solchen Mehrseiten-Chunks, zeigt der Link
+trotzdem nur auf die erste der beiden Seiten — die Seitenangabe ist damit
+approximativ statt exakt, aber nie mehr grundsätzlich falsch wie bei einem
+mitten im Satz zerschnittenen Chunk.
 
 Diese Logik (`chunk_pages`) ist seit dem Chunking-Vergleich ein dünner
 Wrapper um `ingestion/chunking_backends/header_recursive_backend.py` mit den
@@ -182,26 +203,61 @@ strukturell anderen Chunking-Strategien registriert (siehe
 `build_vectorstore()` erzeugt (bzw. leert und befüllt neu) eine Chroma-Collection:
 
 - Bestehende Einträge werden vor dem Neuaufbau vollständig gelöscht
-  (`store.delete(ids=existing_ids)`) — jeder Ingestion-Lauf baut die
-  Wissensbasis konsistent von Grund auf neu auf, es gibt keine inkrementelle
-  Aktualisierung.
+  (`store.delete(ids=existing_ids)`) — für den vollständigen Neuaufbau
+  (`scripts/ingest.py --force`, siehe unten).
 - Dokumente werden in Batches von 200 eingefügt (`add_documents`), um sehr
   große Requests an die Embedding-API zu vermeiden.
+- Für das inkrementelle Update (Standardfall) ergänzen
+  `add_documents_to_vectorstore()` und `delete_source_files()` gezielt nur
+  die betroffenen Dokumente, ohne die Collection zu leeren (siehe 4.4).
 - Persistenzort: `vectorstore/` (git-ignored), Collection-Name
   `abaqus_manuals`.
 
 ### 4.4 Orchestrierung (`pipeline.py`, `scripts/ingest.py`)
 
+`run_ingestion()` liest standardmäßig **inkrementell** ein: Ein
+SHA-256-Fingerabdruck pro PDF wird in
+`ingestion_manifest.json` neben der Collection gespeichert. Bei jedem Lauf
+wird der aktuelle Fingerabdruck jeder Datei in `data/raw_pdfs/` mit dem
+Manifest verglichen:
+
 ```python
-def run_ingestion() -> int:
-    pages = load_pdf_directory(settings.raw_pdf_dir)
-    chunks = chunk_pages(pages)
-    build_vectorstore(chunks)
-    return len(chunks)
+def run_ingestion(force: bool = False, embeddings: Embeddings | None = None) -> int:
+    current = {p.name: fingerprint(p) for p in raw_pdf_dir.glob("*.pdf")}
+    if force or not persist_directory.exists():
+        build_vectorstore(chunk_pages(load_pdf_directory(raw_pdf_dir)))
+        save_manifest(current)
+        return num_chunks
+    previous = load_manifest()
+    changed_or_new = {n for n, fp in current.items() if previous.get(n) != fp}
+    removed = set(previous) - set(current)
+    if not changed_or_new and not removed:
+        return 0                                    # No-op: keine API-Calls
+    delete_source_files(changed_or_new | removed)    # betroffene Chunks entfernen
+    new_chunks = [chunk for n in changed_or_new for chunk in chunk_pages(load_pdf(raw_pdf_dir / n))]
+    add_documents_to_vectorstore(new_chunks)         # neue Chunks ergänzen
+    save_manifest(current)
+    return len(new_chunks)
 ```
 
-`scripts/ingest.py` ist der CLI-Entry-Point, zeigt Fortschritt über einen
-`rich`-Spinner und die Gesamtlaufzeit an.
+Unveränderte Dateien werden komplett übersprungen (kein Parsen, kein
+Embedding-API-Call); neue/geänderte Dateien werden neu geparst, gechunkt und
+eingebettet; Dateien, die aus `data/raw_pdfs/` entfernt wurden, werden über
+`delete_source_files()` (Metadaten-Filter auf `source_file`) aus der
+Collection gelöscht. Da `_merge_page_boundary_continuations()` (Abschnitt
+4.2) Seitenübergänge nur innerhalb derselben Quelldatei zusammenführt, ist
+das isolierte Chunken einer einzelnen Datei bit-identisch zum Chunken im
+Kontext aller Dateien — das Delta-Update verändert also nicht das Ergebnis,
+nur die Laufzeit. `force=True` (CLI: `--force`) erzwingt einen kompletten
+Neuaufbau aller Dateien, z. B. nach einem Chunking- oder
+Embedding-Modell-Wechsel, den der reine Dateiinhalts-Fingerabdruck nicht
+erkennen kann.
+
+`scripts/ingest.py` ist der CLI-Entry-Point (`python scripts/ingest.py` bzw.
+`--force`), zeigt Fortschritt über einen `rich`-Spinner und die
+Gesamtlaufzeit an. Getestet in `tests/test_pipeline.py` (offline, mit
+Fake-Embeddings und on-the-fly erzeugten Mini-PDFs statt der echten
+Handbücher).
 
 ## 5. RAG-Engine
 
@@ -219,8 +275,7 @@ vectorstore.as_retriever(
 MMR holt zunächst `fetch_k=20` Kandidaten per Ähnlichkeitssuche und wählt
 daraus `k=5` möglichst diverse Dokumente aus — vermeidet, dass mehrere
 nahezu identische Chunks derselben Seite den gesamten Kontext belegen. Das
-ist weiterhin der Produktiv-Default, seit dem Retrieval-Vergleich (siehe
-12.6, `docs/RETRIEVAL.md`) aber austauschbar:
+ist der Produktiv-Default, aber austauschbar:
 `build_rag_chain(vectorstore, retrieval_strategy=...)` wählt über
 `rag/retrieval_backends.py::RETRIEVAL_BACKENDS` zwischen MMR, reiner
 Similarity-Suche, Cross-Encoder-Reranking und BM25-Hybrid-Retrieval.
@@ -276,7 +331,7 @@ answer_chain = (
 
 chain = (
     RunnablePassthrough.assign(standalone_question=contextualize_chain)
-    .assign(source_documents=lambda x: retriever.invoke(x["standalone_question"]))
+    .assign(source_documents=lambda x: retrieve(x["standalone_question"]))
     .assign(context=lambda x: format_docs(x["source_documents"]))
     .assign(answer=answer_chain)
 )
@@ -291,7 +346,8 @@ Ablauf pro `chain.invoke({"question": ..., "chat_history": [...]})`:
    definiere ich danach die Randbedingungen dafür?*" zu "*Wie definiere ich
    die Randbedingungen für ein Modell in Abaqus/CAE?*" auf — siehe
    [Verifikationsergebnisse](#11-verifikationsergebnisse)).
-2. **`source_documents`** — MMR-Retriever wird mit der eigenständigen Frage
+2. **`source_documents`** — Der gewählte Retriever (Default MMR, seit 5.1
+   austauschbar über `retrieval_strategy`) wird mit der eigenständigen Frage
    aufgerufen, liefert die Top-`k` Chunks samt Metadaten.
 3. **`context`** — `format_docs()` baut daraus einen nummerierten,
    zitierfähigen Textblock:
@@ -327,9 +383,9 @@ Metadaten seit der Ingestion. `format_docs()` reicht `source_file` und
 Reihenfolge der ersten Nennung bleibt erhalten) und zeigt sie unter der
 Antwort an.
 
-**Klickbare Quellen-Links:** `citations.py` baut aus `source_file` und
-`pdf_page_index` eine `file://`-URL mit PDF-Seitenanker
-(`...#page=N`), z. B.:
+**Klickbare Quellen-Links:** `citations.py` (liegt bei `src/rag_manual_bot/citations.py`,
+nicht unter `rag/`) baut über `source_pdf_link()` aus `source_file` und
+`pdf_page_index` eine `file://`-URL mit PDF-Seitenanker (`...#page=N`), z. B.:
 
 ```
 file:///.../data/raw_pdfs/Abaqus2017_GETTINGSTARTED.pdf#page=1061
@@ -342,10 +398,17 @@ Werte parallel mit. Im Terminal-Chat werden die Links über `rich`s
 `[link=URL]...[/link]`-Markup als klickbare OSC-8-Hyperlinks ausgegeben
 (funktioniert in Terminals mit OSC-8-Unterstützung, z. B. iTerm2, moderne
 Terminal.app-Versionen; bei Pipe-Ausgabe oder nicht unterstützten Terminals
-wird nur der Klartext angezeigt). Im Streamlit-Frontend werden es normale
-Markdown-Links (`[Text](file://...)`) — manche Browser fragen bei
-`file://`-Navigation aus einer `http(s)://`-Seite heraus sicherheitshalber
-nach Bestätigung oder blockieren sie je nach Konfiguration.
+wird nur der Klartext angezeigt).
+
+**Streamlit-Frontend nutzt bewusst *keine* `file://`-Links:** Moderne
+Browser blockieren `file://`-Navigation, die von einer `http(s)://`-Seite
+ausgelöst wird, zuverlässig — ein reiner Markdown-Link auf `citations.py`s
+`file://`-URL wäre dort also im Zweifel tot. `app.py::_static_pdf_link()`
+baut stattdessen einen `http(s)://`-relativen Link über Streamlits
+eingebautes Static-File-Serving (`app/static/<Datei>#page=N`, aktiviert via
+`enableStaticServing = true` in `.streamlit/config.toml`; `static/` ist ein
+Symlink auf `data/raw_pdfs/`) — funktioniert zuverlässig, weil der Link vom
+selben Origin wie die Streamlit-Seite kommt.
 
 ## 6. Terminal-Chat-Interface
 
@@ -353,17 +416,27 @@ Pfad: `src/rag_manual_bot/cli/chat.py`, Entry-Point `main.py`
 
 - Lädt den bestehenden Vectorstore (`load_vectorstore()`); existiert er
   nicht, bricht die CLI mit einem Hinweis auf `scripts/ingest.py` ab, statt
-  mit einer leeren Wissensbasis zu starten.
+  mit einer leeren Wissensbasis zu starten. Zu Beginn zeigt ein `rich.Panel`
+  das aktive Modell (`settings.llm_model`) und die geladene Wissensbasis.
 - Chat-Loop mit `rich.console.Console.input`; Nachrichtenverlauf wird als
   `list[BaseMessage]` (`HumanMessage`/`AIMessage`) über die gesamte Session
-  gehalten und bei jeder Anfrage in `chain.invoke()` mitgegeben.
+  gehalten und bei jeder Anfrage in `chain.stream()` mitgegeben.
 - **Befehle:** `/help`, `/reset` (Verlauf leeren), `/exit` / `/quit` (auch
   `Strg+D`/`Strg+C`).
-- Antworten werden als `rich.markdown.Markdown` gerendert (Listen,
-  Nummerierungen etc. bleiben lesbar), Quellen erscheinen darunter
-  gedimmt.
-- API-/Netzwerkfehler pro Anfrage werden abgefangen und angezeigt, ohne den
-  gesamten Chat abzubrechen.
+- **Streaming:** Tokens aus `chain.stream(...)` werden als Rohtext
+  token-für-token ausgegeben, sobald sie eintreffen (`print(token, end="",
+  flush=True)`), damit die Antwort ohne Wartezeit sichtbar wird — ein
+  `rich.status`-Spinner überbrückt nur die Zeit bis zum ersten Chunk. Sobald
+  der Stream vollständig ist, löscht `_visual_line_count()` + ANSI-Escapes
+  (`\033[{n}A\033[J`) den bereits gedruckten Rohtext wieder und ersetzt ihn
+  einmalig durch die gerenderte `rich.markdown.Markdown`-Fassung (Listen,
+  Nummerierungen etc. bleiben lesbar) — der Trade-off aus Abschnitt 13:
+  während des Streamens Rohtext, da Markdown-Rendering den vollständigen
+  Text voraussetzt. Quellen erscheinen darunter gedimmt.
+- API-/Netzwerkfehler werden sowohl vor Beginn des Streams (Anfrage bricht
+  ab, Chat läuft weiter) als auch währenddessen abgefangen — im zweiten Fall
+  bleiben bereits gestreamte Tokens als Antwort erhalten, damit sichtbarer
+  Chatverlauf und `chat_history` nicht auseinanderlaufen.
 
 ## 7. Konfiguration
 
@@ -381,10 +454,23 @@ Alle Einstellungen liegen typsicher in `src/rag_manual_bot/config.py`
 | `CHUNK_OVERLAP` | `150` | Überlappung zwischen benachbarten Fallback-Chunks. |
 | `RETRIEVAL_K` | `5` | Anzahl finaler Chunks pro Anfrage. |
 | `RETRIEVAL_FETCH_K` | `20` | Kandidatenpool für MMR, aus dem `k` ausgewählt wird. |
+| `GPT4O_MODEL` | `gpt-4o` | Antwort-LLM der Best-of-Breed-Pipeline in `app.py` (siehe 12), läuft über denselben Key/Hub wie `LLM_MODEL`. |
+| `API_REQUEST_TIMEOUT` | `60` | Timeout (Sekunden) für alle OpenAI-/Mistral-API-Clients (LLMs, Embeddings). |
+| `API_MAX_RETRIES` | `2` | Retry-Anzahl für dieselben API-Clients. |
 
 Zusätzlich fest im Code (nicht über `.env` gesteuert, da projektspezifisch):
 `raw_pdf_dir` (`data/raw_pdfs/`), `vectorstore_dir` (`vectorstore/`),
 `collection_name` (`abaqus_manuals`).
+
+**Nur für Vergleichsstudien & RAGAS-Richter** (weder für `main.py` noch für
+`app.py` erforderlich, siehe Abschnitt 12):
+
+| Variable | Default | Beschreibung |
+|---|---|---|
+| `MISTRAL_API_KEY` | *(optional)* | Für Mistral als Antwort-LLM im LLM-/Best-of-Breed-Vergleich (`docs/LLM.md`, `docs/BEST_OF_BREED.md`); ohne Key laufen die betroffenen `evaluate_*`-Skripte mit Mistral nicht. |
+| `MISTRAL_MODEL` | `mistral-small-latest` | Mistral-Antwort-LLM-Variante. |
+| `ANTHROPIC_API_KEY` | *(optional)* | Für den unabhängigen Claude-Richter (`eval/metrics.py::build_judge_metrics(provider="anthropic")`, siehe 12.7/12.8); erforderlich für `scripts/evaluate_*_ragas.py`. |
+| `JUDGE_MODEL` | `claude-sonnet-5` | Claude-Richter-Modell. |
 
 ### Besonderheit: Hochschul-Gateway
 
@@ -404,36 +490,53 @@ getestet. Zwei Punkte waren dabei zu beachten:
 
 ```
 Abaqus_chatbot/
-├── data/raw_pdfs/              # Quell-PDFs (git-ignored)
-├── vectorstore/                # Persistente Chroma-DB (git-ignored)
+├── data/
+│   ├── raw_pdfs/                 # Produktiv-Quell-PDFs (git-ignored)
+│   └── parser_demo_pdfs/         # Deterministischer Parser-Vergleichs-Demo-Korpus (12.2)
+├── vectorstore/                  # Produktiv-Chroma-DB (git-ignored)
+├── vectorstore_parser_demo/       # Demo-Collections je Vergleichsstudie (12.2–12.7,
+├── vectorstore_chunking_demo/     # git-ignored) — jeweils eine Collection pro
+├── vectorstore_embedding_demo/    # verglichenem Parser/Chunking/Embedding
+├── vectorstore_full_custom/       # + on-demand gebaute Kombinationen (app.py-Sidebar)
 ├── docs/
-│   └── DOKUMENTATION.md        # dieses Dokument
+│   ├── DOKUMENTATION.md          # dieses Dokument
+│   └── PARSER.md / CHUNKING.md / EMBEDDING.md / RETRIEVAL.md / LLM.md /
+│       BEST_OF_BREED.md / RAGAS.md / …  # Vergleichsstudien (12)
 ├── src/rag_manual_bot/
-│   ├── config.py                # pydantic-settings (.env)
+│   ├── config.py                 # pydantic-settings (.env)
+│   ├── citations.py              # Klickbare PDF-Deep-Links für den Terminal-Chat (5.4)
 │   ├── ingestion/
-│   │   ├── loader.py            # PDF -> Markdown pro Seite (PyMuPDF4LLM)
-│   │   ├── chunker.py           # Produktiv-Chunking (Wrapper um header_recursive_backend)
-│   │   ├── chunking_backends/   # 6 austauschbare Chunking-Strategien (docs/CHUNKING.md)
-│   │   ├── chunking_demo.py     # Demo-Korpus-Aufbau für Chunking-Vergleich
-│   │   ├── embedding_models.py  # 7 Embedding-Modelle: 3 OpenAI + 4 HF lokal (docs/EMBEDDING.md)
-│   │   ├── embedding_demo.py    # Demo-Korpus-Aufbau für Embedding-Modell-Vergleich
-│   │   ├── custom_demo.py       # app.py-Sidebar: beliebige Kombination auflösen/on-demand bauen
-│   │   └── pipeline.py          # Orchestrierung
+│   │   ├── loader.py             # PDF -> Markdown pro Seite (PyMuPDF4LLM)
+│   │   ├── chunker.py            # Produktiv-Chunking (Wrapper um header_recursive_backend)
+│   │   ├── chunking_backends/    # 6 austauschbare Chunking-Strategien (docs/CHUNKING.md)
+│   │   ├── parser_backends/      # 4 austauschbare PDF-Parser (Abschnitt 12.2)
+│   │   ├── parser_demo.py        # Demo-Korpus-Aufbau für Parser-Vergleich
+│   │   ├── chunking_demo.py      # Demo-Korpus-Aufbau für Chunking-Vergleich
+│   │   ├── embedding_models.py   # 7 Embedding-Modelle: 3 OpenAI + 4 HF lokal (docs/EMBEDDING.md)
+│   │   ├── embedding_demo.py     # Demo-Korpus-Aufbau für Embedding-Modell-Vergleich
+│   │   ├── custom_demo.py        # app.py-Sidebar: beliebige Kombination auflösen/on-demand bauen
+│   │   └── pipeline.py           # Orchestrierung
 │   ├── rag/
-│   │   ├── vectorstore.py       # Chroma-Aufbau/-Ladefunktionen
-│   │   ├── retriever.py         # MMR-Retriever (Produktiv-Default)
+│   │   ├── vectorstore.py        # Chroma-Aufbau/-Ladefunktionen
+│   │   ├── retriever.py          # MMR-Retriever (Produktiv-Default)
 │   │   ├── retrieval_backends.py # 4 Retrieval-Strategien (docs/RETRIEVAL.md)
-│   │   ├── prompts.py           # System-Prompts
-│   │   └── chain.py             # LCEL-Kette
-│   └── cli/
-│       └── chat.py              # Terminal-Chat (rich)
-├── scripts/ingest.py             # Ingestion-Entry-Point
-├── main.py                       # Chat-Entry-Point
-├── tests/
-│   ├── conftest.py
-│   ├── test_chunker.py
-│   └── test_retriever.py
-├── requirements.txt
+│   │   ├── llms.py               # LLM-Provider-Auswahl, `get_llm()` (Abschnitt 12.1)
+│   │   ├── prompts.py            # System-Prompts
+│   │   └── chain.py              # LCEL-Kette
+│   ├── cli/
+│   │   └── chat.py               # Terminal-Chat (rich, Streaming, siehe 6)
+│   └── eval/                     # RAGAS-Evaluation aller Vergleichsstudien (12.3–12.8)
+│       ├── dataset.py            # 12-Fragen-Set (docs/EVAL_FRAGEN.md)
+│       ├── metrics.py            # RAGAS-Metriken + Richter-Aufbau (build_judge_metrics)
+│       └── run.py                # Evaluierungs-Läufe je Vergleichsstudie
+├── scripts/                       # CLI-Entry-Points: ingest.py + build_*_demo_corpus.py /
+│                                  # evaluate_*_ragas.py je Vergleichsstudie
+├── main.py                       # Terminal-Chat-Entry-Point
+├── app.py                        # Streamlit-Frontend (Abschnitt 12)
+├── tests/                        # 7 Testmodule + conftest.py (Details siehe Abschnitt 10)
+├── requirements.txt              # Basis-Requirements
+├── requirements-*.txt            # Optionale Extras je Vergleichsstudie (Parser/Chunking/
+│                                  # Embedding-Vergleich, RAGAS-Eval)
 ├── .env / .env.example
 └── README.md
 ```
@@ -464,15 +567,38 @@ benötigt:
 - `tests/conftest.py` setzt einen Dummy-`OPENAI_API_KEY`, damit das
   `Settings()`-Modul (das beim Import validiert) auch ohne echten Key
   importierbar ist.
-- `tests/test_chunker.py` prüft, dass Überschriften-Metadaten korrekt
+- `tests/test_chunker.py` (3) prüft, dass Überschriften-Metadaten korrekt
   übernommen werden, überlange Abschnitte gesplittet werden und leere
   Seiten keine Chunks erzeugen.
-- `tests/test_retriever.py` nutzt eine selbstgeschriebene
+- `tests/test_retriever.py` (2) nutzt eine selbstgeschriebene
   `FakeEmbeddings`-Klasse (deterministischer SHA256-basierter Pseudo-Vektor
   statt echtem API-Call), um den MMR-Retriever und `format_docs()` gegen
   einen In-Memory-Chroma-Store zu testen.
+- `tests/test_chunking_backends.py` (10) deckt alle sechs Chunking-Backends
+  aus dem Chunking-Vergleich (Abschnitt 12.4) ab, inkl. der drei Fälle rund
+  um `_merge_page_boundary_continuations()` (Merge, Nicht-Merge bei neuer
+  Überschrift, Nicht-Merge bei Seitensprung, siehe Abschnitt 4.2).
+- `tests/test_pipeline.py` (5) prüft die inkrementelle Ingestion
+  (Abschnitt 4.4): Erstlauf baut alles, No-op bei unveränderten Dateien,
+  gezieltes Neu-Verarbeiten nur der geänderten Datei, Löschen entfernter
+  Dateien, `--force` erzwingt Vollaufbau.
+- `tests/test_embedding_models.py` (5) prüft die Embedding-Registry
+  (drei OpenAI- plus vier HuggingFace-Modelle, Abschnitt 12.5), den
+  Prefix-Wrapper für `multilingual-e5-large` sowie die Modell-Prefix-Auflösung.
+- `tests/test_retrieval_backends.py` (7) prüft die vier Retrieval-Strategien
+  (Abschnitt 12.6), insbesondere die selbst implementierte BM25-Indizierung
+  und Reciprocal-Rank-Fusion (Ranking, Deduplizierung, `k`-Grenze).
+- `tests/test_llms.py` (4) prüft die LLM-Provider-Auswahl (`get_llm()`),
+  inkl. der `gpt4o`-Variante aus Abschnitt 12.8.
+- `tests/test_custom_demo.py` (13) prüft `resolve_collection()`
+  (Abschnitt 12) — bekannte Parser-/Chunking-/Embedding-Kombinationen aus
+  den Demo-Korpora werden korrekt aufgelöst, unbekannte Kombinationen als
+  solche erkannt, Default-Werte stimmen mit den Produktiv-Settings überein.
+- `tests/test_eval_dataset.py` (2) prüft, dass der 12-Fragen-Datensatz
+  (`eval/dataset.py`, siehe `docs/EVAL_FRAGEN.md`) wohlgeformt und
+  duplikatfrei ist.
 
-Aktueller Stand: **5/5 Tests grün.**
+Aktueller Stand: **51/51 Tests grün.**
 
 ## 11. Verifikationsergebnisse
 
@@ -511,36 +637,44 @@ End-to-End-Lauf mit den Handbüchern `Abaqus2017_GETTINGSTARTED.pdf`,
 
 Ergänzend zum Terminal-Chat (Abschnitt 6) gibt es ein Streamlit-Frontend
 (`app.py`, `streamlit run app.py`) mit klassischer Chat-Optik
-(`st.chat_message`/`st.chat_input`) und einer Sidebar zur Live-Auswahl von
-**fünf unabhängigen Dimensionen** — Parser, Chunking, Embedding,
-Retrieval-Strategie und Antwort-LLM — ohne Neustart der App. Ein
-Korpus-Umschalter wählt zwischen dem vollen Produktivkorpus (~5.100 Seiten)
-und dem ~53-Seiten-Demo-Korpus; Parser/Chunking/Embedding sind in **beiden**
-Modi frei kombinierbar (`ingestion/custom_demo.py::resolve_collection()`,
-Parameter `corpus="full"|"demo"`). Bereits bekannte Kombinationen (Parser
-12.2, Chunking 12.4, Embedding 12.5, Best-of-Breed 12.7, sowie auf dem
-vollen Korpus die eine Produktiv-Kombination) werden direkt wiederverwendet,
-neue Kombinationen einmalig on-demand gebaut.
+(`st.chat_message`/`st.chat_input`) und einer Sidebar mit genau einem
+Auswahlfeld: der **Pipeline** (Radio-Button). Zur Auswahl stehen zwei fest
+definierte Gesamt-Pipelines (`app.py::PIPELINES`), beide auf dem vollen
+~5.100-Seiten-Produktivkorpus:
 
-**Zeitschätzung vor dem Build:** `estimate_build_seconds()` schätzt die
-Bauzeit grob anhand gemessener Raten (docs/PARSER.md, docs/EMBEDDING.md) und
-zeigt sie in der Sidebar an, bevor ein Build startet - auf dem vollen Korpus
-reicht die Spanne von ~15 Min. (PyMuPDF4LLM/pdfplumber) bis über 30 Std.
-(Docling; siehe docs/PARSER.md, ~70× langsamer als PyMuPDF4LLM). Ab einer
-geschätzten Bauzeit von 30 Min. eskaliert die Sidebar-Warnung von `st.warning`
-zu `st.error`. Da Parsing unabhängig von Chunking/Embedding ist, cacht
-`_parsed_pages_cache` (Prozess-weit, pro Sitzung) die geparsten Seiten je
-Parser×Korpus - ein Parser-Wechsel wird dadurch nur einmal bezahlt, auch
-wenn danach mehrere Chunking-/Embedding-Varianten mit demselben Parser
-ausprobiert werden (`is_parser_cached()` reduziert die Schätzung
-entsprechend).
+- **Produktiv** — PyMuPDF4LLM + Header+Recursive 800 +
+  `text-embedding-3-small` + MMR + `gpt-4o-mini` (der in Abschnitt 12.2–12.6
+  als Produktiv-Default verwendete Aufbau).
+- **Best-of-Breed** — Unstructured + Semantic Chunking +
+  `text-embedding-3-large` + Rerank + **GPT-4o** (die Kombination aus 12.7,
+  per RAGAS auf dem vollen Korpus validiert).
 
-### 12.1 LLM-Vergleich (OpenAI vs. Mistral)
+Beide Pipelines laden über `ingestion/custom_demo.py::resolve_collection()`
+ihre Collection. `vectorstore/` (Produktiv) und `vectorstore_full_custom/`
+(Best-of-Breed) sind zu groß für GitHub (siehe `README.md`, "Setup") und
+daher nicht Teil des Repos — `vectorstore/` entsteht einmalig über `python
+scripts/ingest.py` (~13 Min.); für `vectorstore_full_custom/` gibt es kein
+schnelles Setup-Skript, `resolve_collection()` baut eine fehlende Collection
+zwar automatisch beim ersten Aufruf (`app.py`s Lade-Spinner weist
+entsprechend auf "ggf. einmalig neu aufgebaut" hin), das dauert wegen
+Unstructured `hi_res` auf ~5.100 Seiten aber ca. 5 Std. (siehe
+`docs/PARSER.md`). Das Antwort-LLM ist pipeline-fest vorgegeben: `gpt-4o-mini` bei
+Produktiv, **GPT-4o** bei Best-of-Breed (begründet durch den Befund aus
+12.7, dass GPT-4o dort das mit Abstand stärkste Antwort-LLM ist) — und
+**nicht** separat umschaltbar; ein früherer, unabhängiger
+LLM-Dropdown existiert in der aktuellen `app.py` nicht mehr. Der freie
+Wechsel zwischen den drei Antwort-LLMs (OpenAI-mini, GPT-4o, Mistral)
+bleibt ausschließlich der RAGAS-Studie (Abschnitt 12.8, `docs/LLM.md`)
+vorbehalten. Die einzelnen Demo-Korpus-Vergleichsstudien (Parser 12.2–12.3,
+Chunking 12.4, Embedding 12.5, Retrieval 12.6) sind über die App ebenfalls
+nicht live auswählbar — sie laufen ausschließlich über die jeweiligen
+`scripts/evaluate_*_ragas.py`-Skripte.
 
-`rag/llms.py` kapselt die Provider-Auswahl hinter `get_llm(provider)` (seit
-12.8 zusätzlich mit einem dritten, kostenlosen Provider "qwen" - siehe dort
-für die vollständige, aktuelle Signatur und den RAGAS-Vergleich aller drei
-Modelle):
+### 12.1 LLM-Provider-Auswahl (`get_llm()`)
+
+`rag/llms.py` kapselt die Provider-Auswahl hinter `get_llm(provider)` -
+drei Provider (`openai`, `mistral`, `gpt4o`), siehe 12.8 für den
+vollständigen RAGAS-Vergleich aller drei:
 
 ```python
 def get_llm(provider: str = "openai") -> BaseChatModel:
@@ -548,8 +682,14 @@ def get_llm(provider: str = "openai") -> BaseChatModel:
         return ChatOpenAI(model=settings.llm_model, api_key=settings.openai_api_key,
                            base_url=settings.openai_base_url, temperature=settings.llm_temperature)
     if provider == "mistral":
+        if not settings.mistral_api_key:
+            raise ValueError("MISTRAL_API_KEY ist nicht gesetzt. ...")
         return ChatMistralAI(model=settings.mistral_model, api_key=settings.mistral_api_key,
                               temperature=settings.llm_temperature)
+    if provider == "gpt4o":
+        # Läuft über denselben Hub/Key wie "openai" - volles gpt-4o statt gpt-4o-mini.
+        return ChatOpenAI(model=settings.gpt4o_model, api_key=settings.openai_api_key,
+                           base_url=settings.openai_base_url, temperature=settings.llm_temperature)
 ```
 
 `build_rag_chain(vectorstore, llm_provider=...)` reicht die Wahl an den
@@ -558,8 +698,11 @@ Retrieval, Prompts und Wissensbasis bleiben unverändert, sodass sich
 Antwortqualität und -stil zwischen den Modellen sauber vergleichen lassen.
 Mistral läuft über einen separaten API-Key (`MISTRAL_API_KEY`), da das
 Hochschul-Gateway kein Mistral-Modell proxied (geprüft über `GET
-/v1/models`). Ohne gesetzten Key blendet das Frontend eine Warnung ein,
-statt mit einem unklaren API-Fehler abzubrechen.
+/v1/models`). Im aktuellen `app.py` ist Mistral gar nicht mehr wählbar (siehe
+oben, `PIPELINES` bietet nur `openai`/`gpt4o` an) — erreichbar ist der
+Provider nur noch über die Eval-Skripte (`eval/run.py`). Dort wirft
+`get_llm("mistral")` bei fehlendem Key einen klaren `ValueError` statt eines
+unklaren API-Fehlers.
 
 **Live verifiziert** (`mistral-small-latest` gegen den vollen
 Produktiv-Korpus): Bei identischer Frage ("Was ist der Unterschied zwischen
@@ -579,11 +722,14 @@ def parse(pdf_path: Path) -> dict[int, str]:
     """Seiten-Index (1-basiert, Position in der PDF-Datei) -> extrahierter Text."""
 ```
 
-Da Docling und Unstructured `hi_res` deutlich langsamer sind als
-PyMuPDF4LLM, würde eine Ingestion des vollen ~5.100-Seiten-Produktiv-Korpus
-mit allen vier Parsern unverhältnismäßig lange dauern. Für den
-Frontend-Vergleich wird daher ein fester, deterministischer
-**53-Seiten-Demo-Korpus** verwendet (`ingestion/parser_demo.py`,
+Unstructured `hi_res` ist bei ~5.100 Seiten mit geschätzt mehreren Stunden
+Laufzeit nicht praktikabel; Docling ist zwar ebenfalls deutlich langsamer
+als PyMuPDF4LLM, mit geschätzt ~50 Min. für den vollen Korpus aber
+grundsätzlich machbar (Hochrechnung aus zwei warmen Läufen, siehe
+`ingestion/custom_demo.py::_PARSER_SECONDS_PER_PAGE`). Eine Ingestion
+des vollen Korpus mit allen vier Parsern bliebe dennoch durch Unstructured
+dominiert und unverhältnismäßig aufwändig. Für den Frontend-Vergleich wird
+daher ein fester, deterministischer **53-Seiten-Demo-Korpus** verwendet (`ingestion/parser_demo.py`,
 `DEMO_PAGE_SPECS`), zusammengestellt aus genau den Inhaltstypen, die sich
 im Parser-Vergleich als unterschiedlich schwierig erwiesen haben (TOC-Tabellen,
 linienlose Mini-Tabelle, vollständiges Tutorial-Kapitel, Analyse-Kapitel).
@@ -607,24 +753,22 @@ gleiches LLM): Bei der Frage *"Welcher DOF-Wert steht für Rotation um die
 2-Achse?"* lieferten alle vier Parser-Varianten dieselbe korrekte Antwort
 ("6") — obwohl Doclings Rohtext die zugrunde liegende Tabellenstruktur
 komplett verliert. Das LLM konnte den Strukturverlust im vorliegenden Fall
-aus dem umgebenden Fließtext kompensieren. Details, Messwerte und die
-Korrektur der ursprünglichen (durch Modell-Cold-Start verzerrten)
-Laufzeit-Hochrechnung: [`docs/PARSER.md`, Abschnitt "Nachtrag"](PARSER.md#nachtrag-live-vergleich-im-frontend-50-seiten-demo-korpus).
+aus dem umgebenden Fließtext kompensieren.
 
 ### 12.3 Quantitative Evaluation (RAGAS)
 
 Der anekdotische Live-Vergleich aus 12.2 wurde um eine systematische,
 metrikbasierte Auswertung mit dem [RAGAS](https://docs.ragas.io/)-Framework
-ergänzt: alle 4 Parser × 2 LLMs (8 Kombinationen) auf demselben
-Demo-Korpus, demselben 12-Fragen-Set und fünf Metriken (Faithfulness,
-AnswerRelevancy, ContextPrecision, ContextRecall, FactualCorrectness) — 480
-Einzel-Scores, ausgewertet mit einem für alle Kombinationen fest gehaltenen
-Richter-LLM (vermeidet Self-Preference-Bias). Ergebnis in Kurzform:
-Unstructured+OpenAI und PyMuPDF4LLM+OpenAI liegen mit 0,785 bzw. 0,763
-Gesamtmittelwert knapp vorn, Docling in beiden LLM-Kombinationen deutlich
-zurück (0,679 / 0,601) — konsistent mit dem qualitativen Befund aus
-`PARSER.md`. Vollständige Methodik, Ergebnistabellen und Einordnung:
-[`docs/EVALUATION.md`](EVALUATION.md).
+ergänzt: alle 4 Parser (Antwort-LLM fest `gpt-4o-mini`) auf demselben
+Demo-Korpus, demselben 12-Fragen-Set
+und fünf Metriken (Faithfulness, AnswerRelevancy, ContextPrecision,
+ContextRecall, FactualCorrectness) — 240 Einzel-Scores, ausgewertet mit
+einem fest gehaltenen Richter-LLM. Ergebnis in Kurzform (nach dem
+Chunking-Seitengrenzen-Fix):
+Unstructured und PyMuPDF4LLM liegen mit 0,801 bzw. 0,796 Gesamtmittelwert
+praktisch gleichauf vorn, Docling und pdfplumber bleiben deutlich zurück
+(⌀ 0,699 bzw. 0,644). Vollständige Methodik, Ergebnistabellen und
+Einordnung: [`docs/PARSER.md`](PARSER.md).
 
 ### 12.4 Chunking-Vergleich (6 Strategien, RAGAS)
 
@@ -643,8 +787,7 @@ Aufbau (`ingestion/chunking_demo.py`, `scripts/build_chunking_demo_corpus.py`)
 und Evaluation (`eval/run.py::run_chunking_evaluation`,
 `scripts/evaluate_chunking_ragas.py`) folgen exakt demselben Muster wie beim
 Parser-Vergleich — gleicher Demo-Korpus, gleiches 12-Fragen-Set, gleicher
-fester OpenAI-Richter. Alle sechs Varianten sind zusätzlich live im
-Streamlit-Frontend wählbar (Sidebar, "Vergleich Chunking: …").
+fester `gpt-4o-mini`-Richter.
 
 Vollständige Methodik, Vergleichspaare (welche Variable jeweils isoliert
 wird) und Ergebnistabellen: [`docs/CHUNKING.md`](CHUNKING.md).
@@ -678,8 +821,7 @@ Aufbau (`ingestion/embedding_demo.py`, `scripts/build_embedding_demo_corpus.py`)
 und Evaluation (`eval/run.py::run_embedding_evaluation`,
 `scripts/evaluate_embedding_ragas.py`) folgen demselben Muster wie Parser-
 und Chunking-Vergleich — gleicher Demo-Korpus, gleiches 12-Fragen-Set,
-gleicher fester OpenAI-Richter. Alle sieben Modelle sind zusätzlich live im
-Streamlit-Frontend wählbar (Sidebar, "Vergleich Embedding: …").
+gleicher fester `gpt-4o-mini`-Richter.
 
 Vollständige Methodik und Ergebnistabellen: [`docs/EMBEDDING.md`](EMBEDDING.md).
 
@@ -701,7 +843,7 @@ dafür einen `retrieval_strategy`-Parameter (Default `"mmr"`, unverändertes
 Produktiv-Verhalten). BM25 (`hybrid`) ist über `rank_bm25` direkt
 implementiert statt über das laut Upstream im Sunsetting-Modus befindliche
 `langchain_community.retrievers.BM25Retriever` (gleiche Begründung wie beim
-`_ragas_compat`-Stub, siehe §3); die Fusion läuft über eine selbst
+`_ragas_compat`-Stub, siehe `docs/RAGAS.md`); die Fusion läuft über eine selbst
 implementierte Reciprocal Rank Fusion statt einer
 `langchain.retrievers.EnsembleRetriever`-Abhängigkeit. Schließt den in
 Abschnitt 13 zuvor offenen Punkt "Kein Re-Ranking / keine Contextual
@@ -717,62 +859,81 @@ Semantic Chunking, `text-embedding-3-large`, Rerank) bisher nicht. Dieses
 abschließende Experiment (`scripts/build_best_of_breed_demo.py`,
 `eval/run.py::run_best_of_breed_evaluation`,
 `scripts/evaluate_best_of_breed.py`) baut genau diese Kombination und
-vergleicht sie im selben RAGAS-Lauf (fester Richter, frische Baseline-
-Generierung) gegen die Produktiv-äquivalente Baseline — über alle drei
-Antwort-LLMs (siehe 12.8), inklusive Qwen.
+vergleicht sie im selben RAGAS-Lauf (frische Baseline-Generierung) gegen
+die Produktiv-äquivalente Baseline — über alle drei Antwort-LLMs, mit
+**GPT-4o** als dritter Variante (siehe 12.8). Da hier drei Antwort-LLMs
+unterschiedlicher Anbieter direkt
+gegeneinander antreten, wird als Richter bewusst ein von allen Kandidaten
+unabhängiges Modell eingesetzt (**Claude Sonnet 5**, Anthropic) statt des
+sonst verwendeten `gpt-4o-mini` (Self-Preference-Bias-Risiko, siehe 12.8).
 
-Ergebnis: Die Best-of-Breed-Pipeline gewinnt bei **allen 5 Metriken für
-alle drei LLMs ohne Ausnahme** gegenüber der Baseline (⌀ 0.847 vs. 0.745,
-+13,7 %). **Wichtiger Gegencheck:** Sie bleibt aber knapp **hinter** der
-besten Einzelkombination des gesamten Projekts — Retrieval: Rerank +
-OpenAI aus 12.6 (⌀ 0.863) —, bei der nur die Retrieval-Strategie auf sonst
-unveränderter Produktiv-Pipeline getauscht wurde. Stacking aller vier
-Einzelsieger übertrifft die einfachere "nur Rerank"-Verbesserung auf
-dieser Stichprobe also **nicht**, vermutlich weil Unstructured (hi_res) nur
-40 von 53 Demo-Seiten als nicht-leer erkannte und damit Korpusabdeckung
-verliert, die den Qualitätsgewinn anderswo teilweise auffrisst. Praktische
-Empfehlung entsprechend schlanker: Produktiv-Pipeline + Rerank + Qwen statt
-des vollen Umbaus. Details: [`docs/BEST_OF_BREED.md`](BEST_OF_BREED.md).
+Ergebnis: Die Best-of-Breed-Pipeline schlägt die Baseline im Durchschnitt
+über alle drei LLMs deutlich (⌀ 0,819 vs. 0,716, **+14,4 %**), allerdings
+nicht bei jeder Einzelmetrik und jedem LLM gleichermaßen — mit GPT-4o
+gewinnt Best-of-Breed alle fünf Metriken, mit Mistral und, geringfügig,
+mit GPT-4o-mini sinkt die Faithfulness gegenüber der Baseline. Innerhalb
+von Best-of-Breed ist GPT-4o mit Abstand das stärkste Antwort-LLM (⌀ 0,863
+vor GPT-4o-mini 0,821 und Mistral 0,772) — die Produktiv-App bietet
+Best-of-Breed entsprechend standardmäßig mit GPT-4o als Antwort-LLM an.
+Details: [`docs/BEST_OF_BREED.md`](BEST_OF_BREED.md).
 
 ### 12.8 Antwort-LLM-Vergleich (3 Modelle, RAGAS)
 
 Zieht die LLM-Wahl, die in jedem der vier vorherigen Vergleiche nur als
 feste Zweier-Achse (OpenAI/Mistral) mitlief, als eigene isolierte Dimension
-heraus und ergänzt ein drittes, kostenloses Modell:
-**Qwen2.5-32B-Instruct-AWQ** (offenes Gewichts-Modell, läuft über denselben
-FH-SWF-Hub/Key wie `openai` — `rag/llms.py::get_llm("qwen")` unterscheidet
-sich von `get_llm("openai")` nur im `model`-Parameter). Parser, Chunking,
-Embedding und Retrieval bleiben fix (Produktiv-Default), läuft wie der
-Retrieval-Vergleich ohne eigenen Demo-Korpus-Build.
+heraus und ergänzt ein drittes Modell: **GPT-4o** (volle Modellgröße,
+dieselbe Generation wie der Produktiv-Default `gpt-4o-mini`, läuft über
+denselben FH-SWF-Hub/Key wie `openai` —
+`rag/llms.py::get_llm("gpt4o")` unterscheidet sich von `get_llm("openai")`
+nur im `model`-Parameter). Parser,
+Chunking, Embedding und Retrieval bleiben fix (Produktiv-Default), läuft
+wie der Retrieval-Vergleich ohne eigenen Demo-Korpus-Build. Da hier drei
+Antwort-LLMs unterschiedlicher Anbieter direkt gegeneinander antreten, wird
+als Richter ein von allen Kandidaten unabhängiges Modell eingesetzt
+(**Claude Sonnet 5**, Anthropic) statt des sonst verwendeten `gpt-4o-mini`,
+das derselben Familie wie zwei der drei Kandidaten angehören würde
+(Self-Preference-Bias-Risiko).
 
-Überraschendes Ergebnis: **Qwen gewinnt das Gesamtranking** (⌀ 0.756, vor
-OpenAI 0.748 und Mistral 0.713) — mit der besten Faithfulness und
-FactualCorrectness aller drei Modelle, aber spürbar langsamer pro Anfrage.
-Details: [`docs/LLM.md`](LLM.md).
+Ergebnis: **GPT-4o-mini und GPT-4o liegen unter dem unabhängigen Richter
+praktisch gleichauf** (⌀ 0,741 vs. 0,739), Mistral bleibt mit 0,662 deutlich
+dahinter. Überraschend dabei: Mistral gewinnt trotz niedrigstem Gesamtscore
+die AnswerRelevancy-Einzelmetrik. Details: [`docs/LLM.md`](LLM.md).
 
 ## 13. Bekannte Grenzen & mögliche Erweiterungen
 
-- **Parser-Vergleich nur auf Demo-Korpus:** Der Vier-Parser-Vergleich im
-  Frontend läuft auf einem festen 53-Seiten-Ausschnitt, nicht auf dem vollen
-  Produktiv-Korpus (Begründung: Laufzeit, siehe Abschnitt 12.2 und
-  `docs/PARSER.md`). Eine repräsentative Stichprobe, aber keine vollständige
-  Abdeckung aller Handbuch-Inhalte.
-- **Kein inkrementelles Update:** Jeder Ingestion-Lauf baut die Collection
-  komplett neu auf; bei großen Korpora wäre ein Diff-basiertes Update
-  (nur geänderte PDFs neu einlesen) sinnvoll.
-- **Seitenbasiertes Header-Splitting:** Abschnitte, die über eine
-  Seitengrenze hinauslaufen, können in zwei Chunks mit unterschiedlicher
-  Seitenzahl zerfallen (siehe 4.2).
+- **Parser-Vergleich nur auf Demo-Korpus:** Der Vier-Parser-RAGAS-Vergleich
+  (`scripts/evaluate_ragas.py`, siehe `docs/PARSER.md`) läuft auf einem
+  festen 53-Seiten-Ausschnitt, nicht auf dem vollen Produktiv-Korpus
+  (Begründung: Laufzeit, siehe Abschnitt 12.2 und `docs/PARSER.md`). Eine
+  repräsentative Stichprobe, aber keine vollständige Abdeckung aller
+  Handbuch-Inhalte.
+- ~~Kein inkrementelles Update: Jeder Ingestion-Lauf baut die Collection
+  komplett neu auf~~ — behoben: `run_ingestion()` liest standardmäßig nur
+  neue/geänderte PDFs neu ein (Fingerabdruck-Manifest,
+  `delete_source_files()`/`add_documents_to_vectorstore()`), siehe
+  Abschnitt 4.4.
+- ~~Seitenbasiertes Header-Splitting: Abschnitte, die über eine Seitengrenze
+  hinauslaufen, können in zwei Chunks mit unterschiedlicher Seitenzahl
+  zerfallen~~ — **teilweise behoben:** Abschnitte ohne neue Überschrift am
+  Seitenanfang werden jetzt mit dem letzten Abschnitt der Vorseite
+  zusammengeführt, `page_number` wird dafür zu einem Bereich (z. B.
+  "1059-1060"), siehe 4.2. Verbleibende Einschränkung: Der PDF-Deep-Link
+  (`#page=N`) zeigt bei solchen zusammengeführten Chunks weiterhin nur auf
+  die Startseite, nicht auf die ggf. relevantere Folgeseite.
 - ~~Kein Re-Ranking / keine Contextual Compression~~ — behoben: siehe
   Retrieval-Strategie-Vergleich (12.6, `docs/RETRIEVAL.md`), der u. a. ein
   Cross-Encoder-Reranking gegen die Produktiv-Baseline testet.
-- **Keine automatisierte Retrieval-Qualitätsmessung:** Eine
-  RAGAS-/Giskard-basierte Evaluation (Faithfulness, Context Precision/Recall)
-  wäre eine sinnvolle Ergänzung für eine quantitative Bewertung im Rahmen
-  des Studienmoduls.
-- **Kein Streaming:** Die CLI wartet auf die vollständige Antwort, bevor sie
-  ausgegeben wird; `llm.stream()`/`chain.stream()` würde Token-für-Token-Ausgabe
-  ermöglichen.
+- ~~Keine automatisierte Retrieval-Qualitätsmessung~~ — behoben: siehe
+  Abschnitt 12.3–12.8 sowie `docs/PARSER.md`, `docs/RAGAS.md`, `docs/CHUNKING.md`,
+  `docs/EMBEDDING.md`, `docs/RETRIEVAL.md`, `docs/BEST_OF_BREED.md` und
+  `docs/LLM.md` — RAGAS-Evaluation (Faithfulness, AnswerRelevancy,
+  ContextPrecision, ContextRecall, FactualCorrectness) über alle fünf
+  Vergleichsstudien und das Best-of-Breed-Experiment.
+- ~~Kein Streaming: Die CLI wartet auf die vollständige Antwort, bevor sie
+  ausgegeben wird~~ — behoben: `cli/chat.py` nutzt `chain.stream()` für
+  Token-für-Token-Ausgabe im Terminal-Chat, siehe Abschnitt 6. Betrifft nur
+  `main.py`/`cli/chat.py` —
+  das Streamlit-Frontend (`app.py`) nutzt weiterhin `chain.invoke()`.
 - **Speicherumfang bewusst begrenzt:** Aktuell 4 von 21 verfügbaren
   Abaqus-2017-Handbüchern (~5.100 von ~21.800 Seiten) eingelesen —
   Getting Started, Analysis, Theory und Keywords —, um Ingestion-Dauer und

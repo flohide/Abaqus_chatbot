@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RAG-Pipeline-Vergleich: Parser × Chunking × Embedding × Retrieval × LLM × Best-of-Breed</title>
+<title>RAG-Pipeline-Ergebnisse: Parser × Chunking × Embedding × Retrieval × LLM × Best-of-Breed</title>
 <style>
   /* #tooltip ist ein Geschwister-Element von .viz-root (siehe HTML unten), keine
      Nachfahre - CSS-Variablen vererben sich nur nach unten, daher müssen sie hier
@@ -19,9 +19,9 @@
     --gridline:       #e1e0d9;
     --baseline:       #c3c2b7;
     --border:         rgba(11,11,11,0.10);
-    --series-1:       #2a78d6; /* OpenAI */
+    --series-1:       #2a78d6; /* GPT-4o-mini */
     --series-2:       #eb6834; /* Mistral */
-    --series-3:       #1baf7a; /* Qwen */
+    --series-3:       #1baf7a; /* GPT-4o */
     --accent-wash:    rgba(42,120,214,0.08);
   }
   @media (prefers-color-scheme: dark) {
@@ -186,60 +186,61 @@
     <header class="page-head">
       <h1>RAG-Pipeline-Vergleich: Parser × Chunking × Embedding × Retrieval × LLM × Best-of-Breed</h1>
       <p>Fünf unabhängige RAGAS-Vergleichsstudien auf demselben ~53-Seiten-Demo-Korpus und
-        identischem 12-Fragen-Set, jeweils mit festem OpenAI-Richter: PDF-Parser (4 Varianten),
-        Chunking-Strategien (6 Varianten), Embedding-Modelle (7 Varianten, 3 OpenAI + 4 lokale
-        HuggingFace-Modelle), Retrieval-Strategien (4 Varianten: MMR, Similarity, Cross-Encoder-
-        Rerank, BM25-Hybrid) und Antwort-LLMs (3 Varianten: OpenAI, Mistral, das kostenlose
-        Qwen2.5-32B). <strong>Jede Studie variiert nur ihre eigene Dimension</strong> — die
-        übrigen bleiben auf dem Produktiv-Default fixiert (siehe Hinweis je Tab). Ein
+        identischem 12-Fragen-Set: PDF-Parser (4 Varianten), Chunking-Strategien (6 Varianten),
+        Embedding-Modelle (7 Varianten, 3 OpenAI + 4 lokale HuggingFace-Modelle) und
+        Retrieval-Strategien (4 Varianten: MMR, Similarity, Cross-Encoder-Rerank, BM25-Hybrid)
+        laufen mit festem Antwort-LLM (<code>gpt-4o-mini</code>) und festem
+        <strong>GPT-4o-mini-Richter</strong> — Antwort-LLM und Richter sind dort identisch, aber
+        alle verglichenen Varianten trifft das gleichermaßen, verzerrt also nicht die relative
+        Rangfolge. Der eigentliche Antwort-LLM-Vergleich (3 Varianten:
+        GPT-4o-mini, Mistral, GPT-4o laufen dagegen bewusst mit einem unabhängigen
+        <strong>Claude-Richter</strong> (<code>claude-sonnet-5</code>, Anthropic) statt
+        GPT-4o-mini — dort treten OpenAI-Modelle direkt gegen Mistral an, ein Richter aus der
+        OpenAI-Familie wäre Kandidat und Richter zugleich (Self-Preference-Bias-Risiko, siehe
+        <code>eval/metrics.py</code>). <strong>Jede Studie variiert nur ihre eigene
+        Dimension</strong> — die übrigen bleiben auf dem Produktiv-Default fixiert. Ein
         abschließendes Experiment ("Best-of-Breed") kombiniert die vier Pipeline-Einzelsieger zu
-        einer Gesamt-Pipeline und testet sie gegen die Produktiv-Baseline — schlägt zwar klar die
-        Baseline, aber überraschenderweise <strong>nicht</strong> die einfachere "nur Rerank"-Variante.
-        Zusammen: 51 Kombinationen × 12 Fragen × 5 Metriken = 3.060 Einzel-Scores, 0 Fehler.</p>
+        einer Gesamt-Pipeline und testet sie gegen die Produktiv-Baseline.
+        Zusammen: 30 Kombinationen × 12 Fragen × 5 Metriken = 1.800 Einzel-Scores.</p>
     </header>
 
     <div class="hero-row">
       <div class="stat-tile">
         <div class="label">Bester Parser</div>
-        <div class="value hero-accent">0.785</div>
-        <div class="sub">Unstructured + OpenAI</div>
+        <div class="value hero-accent">0.801</div>
+        <div class="sub">Unstructured</div>
       </div>
       <div class="stat-tile">
         <div class="label">Beste Chunking-Strategie</div>
-        <div class="value hero-accent">0.821</div>
-        <div class="sub">Semantic Chunking + OpenAI</div>
+        <div class="value hero-accent">0.814</div>
+        <div class="sub">Semantic</div>
       </div>
       <div class="stat-tile">
         <div class="label">Bestes Embedding-Modell</div>
-        <div class="value hero-accent">0.820</div>
-        <div class="sub">text-embedding-3-large + OpenAI</div>
+        <div class="value hero-accent">0.797</div>
+        <div class="sub">text-embedding-3-small</div>
       </div>
       <div class="stat-tile">
         <div class="label">Beste Retrieval-Strategie</div>
-        <div class="value hero-accent">0.863</div>
-        <div class="sub">Rerank (Cross-Encoder) + OpenAI — perfekte ContextRecall (1.000)</div>
-      </div>
-      <div class="stat-tile">
-        <div class="label">Überraschungsfund</div>
-        <div class="value">0.958</div>
-        <div class="sub">multilingual-e5-large (lokal, kostenlos) — höchste ContextPrecision aller 21 getesteten Varianten (4 Parser + 6 Chunking + 7 Embedding + 4 Retrieval)</div>
+        <div class="value hero-accent">0.869</div>
+        <div class="sub">Rerank (Cross-Encoder)</div>
       </div>
       <div class="stat-tile">
         <div class="label">Bestes Antwort-LLM</div>
-        <div class="value hero-accent">0.756</div>
-        <div class="sub">Qwen2.5-32B (kostenlos, kein eigener Key) — schlägt OpenAI (0.748) und Mistral (0.713)</div>
+        <div class="value hero-accent">0.741</div>
+        <div class="sub">GPT-4o-mini</div>
       </div>
       <div class="stat-tile">
         <div class="label">Best-of-Breed vs. Baseline</div>
-        <div class="value hero-accent">+13,7 %</div>
-        <div class="sub">Kombination der vier Einzelsieger gewinnt bei allen 5 Metriken, für alle drei LLMs, ohne Ausnahme (⌀ 0.847 vs. 0.745) — bleibt aber knapp hinter "nur Rerank" (0.863, Tab "Retrieval")</div>
+        <div class="value hero-accent">+14,4 %</div>
+        <div class="sub">Best-of-Breed</div>
       </div>
     </div>
 
     <section class="card">
       <h2>Bestes Ergebnis je Dimension</h2>
       <p class="card-sub">Gesamtdurchschnitt (⌀ über alle 5 RAGAS-Metriken) der jeweils besten Kombination —
-        alle vier Bestwerte stammen von OpenAI als Antwort-LLM, daher eine Farbe.</p>
+        alle vier Bestwerte stammen von GPT-4o-mini als Antwort-LLM, daher eine Farbe.</p>
       <div class="chart-scroll"><div id="chart-overview"></div></div>
     </section>
 
@@ -260,14 +261,17 @@
     <div id="tab-bob" class="tabpanel" role="tabpanel" aria-labelledby="tab-btn-bob"></div>
 
     <footer class="notes">
-      <p>Quellen: <code>docs/EVALUATION.md</code> (Parser, Lauf 20260811_124845),
-        <code>docs/CHUNKING.md</code> (Chunking, Lauf 20260812_172708),
-        <code>docs/EMBEDDING.md</code> (Embedding, Lauf 20260812_190653),
-        <code>docs/RETRIEVAL.md</code> (Retrieval, Lauf 20260812_200254),
-        <code>docs/LLM.md</code> (Antwort-LLM, Lauf 20260813_060743),
-        <code>docs/BEST_OF_BREED.md</code> (Best-of-Breed, Lauf 20260813_063342). n=12 Fragen auf
-        einem Demo-Korpus je Studie — geeignet für klare Tendenzen, nicht für knappe
-        Rangunterschiede als statistisch gesichert.</p>
+      <p>Quellen: <code>docs/EVALUATION.md</code> (Parser, Demo-Korpus, GPT-4o-mini-Richter, Lauf 20260913_172832),
+        <code>docs/CHUNKING.md</code> (Chunking, Demo-Korpus, GPT-4o-mini-Richter, Lauf 20260914_043622),
+        <code>docs/EMBEDDING.md</code> (Embedding, Demo-Korpus, GPT-4o-mini-Richter, Lauf 20260914_044025),
+        <code>docs/RETRIEVAL.md</code> (Retrieval, Demo-Korpus, GPT-4o-mini-Richter, Lauf 20260914_044238),
+        eval_results/llm_ragas_raw_20260915_094357.csv (Antwort-LLM, Demo-Korpus,
+        <strong>Claude-Richter</strong>, ersetzt den alten GPT-4o-mini-Richter-Lauf aus
+        <code>docs/LLM.md</code>), eval_results/best_of_breed_raw_20260915_094906.csv
+        (Best-of-Breed, Demo-Korpus, <strong>Claude-Richter</strong>, ersetzt den alten
+        GPT-4o-mini-Richter-Lauf aus <code>docs/BEST_OF_BREED.md</code>).
+        n=12 Fragen je Studie, jeweils ein einzelner, nicht wiederholter Lauf — geeignet für klare
+        Tendenzen, nicht für knappe Rangunterschiede als statistisch gesichert.</p>
     </footer>
   </div>
 </div>
@@ -343,82 +347,65 @@
   }
 
   const PARSER = {
-    fixedNote: "Chunking und Embedding-Modell bleiben auf dem Produktiv-Default fixiert (Header+Recursive 800, text-embedding-3-small) — variiert wird ausschließlich der PDF-Parser.",
+    fixedNote: "Korpus: Demo-Korpus (~53 Seiten). Restliche Pipeline fix: Chunking Header+Recursive 800, Embedding text-embedding-3-small, Retrieval MMR, Antwort-LLM GPT-4o-mini — variiert wird nur der Parser.",
     categories: [
       { key: "unstructured", label: "Unstructured" },
       { key: "pymupdf4llm", label: "PyMuPDF4LLM (Produktiv)" },
-      { key: "pdfplumber", label: "pdfplumber" },
       { key: "docling", label: "Docling" },
+      { key: "pdfplumber", label: "pdfplumber" },
     ],
     rows: withAvg([
-      { chunking: "unstructured", llm: "openai", faithfulness: 0.860, answer_relevancy: 0.806, context_precision: 0.864, context_recall: 0.833, factual_correctness: 0.564 },
-      { chunking: "unstructured", llm: "mistral", faithfulness: 0.568, answer_relevancy: 0.755, context_precision: 0.864, context_recall: 0.833, factual_correctness: 0.587 },
-      { chunking: "pymupdf4llm", llm: "openai", faithfulness: 0.794, answer_relevancy: 0.812, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.597 },
-      { chunking: "pymupdf4llm", llm: "mistral", faithfulness: 0.808, answer_relevancy: 0.713, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.499 },
-      { chunking: "pdfplumber", llm: "openai", faithfulness: 0.903, answer_relevancy: 0.719, context_precision: 0.828, context_recall: 0.875, factual_correctness: 0.419 },
-      { chunking: "pdfplumber", llm: "mistral", faithfulness: 0.731, answer_relevancy: 0.639, context_precision: 0.828, context_recall: 0.875, factual_correctness: 0.488 },
-      { chunking: "docling", llm: "openai", faithfulness: 0.660, answer_relevancy: 0.711, context_precision: 0.667, context_recall: 0.792, factual_correctness: 0.567 },
-      { chunking: "docling", llm: "mistral", faithfulness: 0.658, answer_relevancy: 0.438, context_precision: 0.667, context_recall: 0.792, factual_correctness: 0.448 },
+      { chunking: "unstructured", llm: "openai", faithfulness: 0.898, answer_relevancy: 0.784, context_precision: 0.864, context_recall: 0.875, factual_correctness: 0.585 },
+      { chunking: "pymupdf4llm", llm: "openai", faithfulness: 0.838, answer_relevancy: 0.729, context_precision: 0.901, context_recall: 0.917, factual_correctness: 0.595 },
+      { chunking: "docling", llm: "openai", faithfulness: 0.727, answer_relevancy: 0.706, context_precision: 0.702, context_recall: 0.750, factual_correctness: 0.611 },
+      { chunking: "pdfplumber", llm: "openai", faithfulness: 0.857, answer_relevancy: 0.525, context_precision: 0.801, context_recall: 0.625, factual_correctness: 0.411 },
     ]),
   };
 
   const CHUNKING = {
-    fixedNote: "Parser und Embedding-Modell bleiben auf dem Produktiv-Default fixiert (PyMuPDF4LLM, text-embedding-3-small) — variiert wird ausschließlich die Chunking-Strategie.",
+    fixedNote: "Korpus: Demo-Korpus (~53 Seiten). Restliche Pipeline fix: Parser PyMuPDF4LLM, Embedding text-embedding-3-small, Retrieval MMR, Antwort-LLM GPT-4o-mini — variiert wird nur die Chunking-Strategie.",
     categories: [
       { key: "semantic", label: "Semantic" },
-      { key: "recursive_only", label: "Recursive-only" },
       { key: "header_recursive_800", label: "Header+Recursive 800 (Produktiv)" },
-      { key: "token_based", label: "Token-basiert" },
+      { key: "recursive_only", label: "Recursive-only" },
       { key: "header_recursive_1600", label: "Header+Recursive 1600" },
+      { key: "token_based", label: "Token-basiert" },
       { key: "header_recursive_400", label: "Header+Recursive 400" },
     ],
     rows: withAvg([
-      { chunking: "header_recursive_1600", llm: "mistral", faithfulness: 0.767, answer_relevancy: 0.644, context_precision: 0.694, context_recall: 0.792, factual_correctness: 0.598 },
-      { chunking: "header_recursive_1600", llm: "openai", faithfulness: 0.854, answer_relevancy: 0.730, context_precision: 0.694, context_recall: 0.792, factual_correctness: 0.560 },
-      { chunking: "header_recursive_400", llm: "mistral", faithfulness: 0.549, answer_relevancy: 0.666, context_precision: 0.794, context_recall: 0.625, factual_correctness: 0.531 },
-      { chunking: "header_recursive_400", llm: "openai", faithfulness: 0.889, answer_relevancy: 0.674, context_precision: 0.794, context_recall: 0.625, factual_correctness: 0.503 },
-      { chunking: "header_recursive_800", llm: "mistral", faithfulness: 0.789, answer_relevancy: 0.736, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.532 },
-      { chunking: "header_recursive_800", llm: "openai", faithfulness: 0.736, answer_relevancy: 0.814, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.586 },
-      { chunking: "recursive_only", llm: "mistral", faithfulness: 0.706, answer_relevancy: 0.700, context_precision: 0.906, context_recall: 0.833, factual_correctness: 0.527 },
-      { chunking: "recursive_only", llm: "openai", faithfulness: 0.860, answer_relevancy: 0.735, context_precision: 0.906, context_recall: 0.833, factual_correctness: 0.552 },
-      { chunking: "semantic", llm: "mistral", faithfulness: 0.823, answer_relevancy: 0.696, context_precision: 0.896, context_recall: 0.958, factual_correctness: 0.558 },
-      { chunking: "semantic", llm: "openai", faithfulness: 0.823, answer_relevancy: 0.785, context_precision: 0.896, context_recall: 0.958, factual_correctness: 0.645 },
-      { chunking: "token_based", llm: "mistral", faithfulness: 0.671, answer_relevancy: 0.626, context_precision: 0.896, context_recall: 0.750, factual_correctness: 0.569 },
-      { chunking: "token_based", llm: "openai", faithfulness: 0.743, answer_relevancy: 0.734, context_precision: 0.896, context_recall: 0.750, factual_correctness: 0.515 },
+      { chunking: "header_recursive_1600", llm: "openai", faithfulness: 0.771, answer_relevancy: 0.780, context_precision: 0.797, context_recall: 0.875, factual_correctness: 0.581 },
+      { chunking: "header_recursive_400", llm: "openai", faithfulness: 0.815, answer_relevancy: 0.674, context_precision: 0.758, context_recall: 0.667, factual_correctness: 0.528 },
+      { chunking: "header_recursive_800", llm: "openai", faithfulness: 0.854, answer_relevancy: 0.735, context_precision: 0.901, context_recall: 0.917, factual_correctness: 0.607 },
+      { chunking: "recursive_only", llm: "openai", faithfulness: 0.850, answer_relevancy: 0.735, context_precision: 0.906, context_recall: 0.833, factual_correctness: 0.538 },
+      { chunking: "semantic", llm: "openai", faithfulness: 0.797, answer_relevancy: 0.778, context_precision: 0.896, context_recall: 0.958, factual_correctness: 0.642 },
+      { chunking: "token_based", llm: "openai", faithfulness: 0.731, answer_relevancy: 0.731, context_precision: 0.896, context_recall: 0.750, factual_correctness: 0.504 },
     ]),
   };
 
   const EMBEDDING = {
-    fixedNote: "Parser und Chunking bleiben auf dem Produktiv-Default fixiert (PyMuPDF4LLM, Header+Recursive 800) — variiert wird ausschließlich das Embedding-Modell. \"(lokal)\" = HuggingFace via sentence-transformers, kein API-Call.",
+    fixedNote: "Korpus: Demo-Korpus (~53 Seiten). Restliche Pipeline fix: Parser PyMuPDF4LLM, Chunking Header+Recursive 800, Retrieval MMR, Antwort-LLM GPT-4o-mini — variiert wird nur das Embedding-Modell.",
     categories: [
-      { key: "text-embedding-3-large", label: "text-embedding-3-large" },
+      { key: "text-embedding-3-small", label: "text-embedding-3-small (Produktiv)" },
       { key: "multilingual-e5-large", label: "multilingual-e5-large (lokal)" },
       { key: "text-embedding-ada-002", label: "text-embedding-ada-002" },
-      { key: "text-embedding-3-small", label: "text-embedding-3-small (Produktiv)" },
+      { key: "text-embedding-3-large", label: "text-embedding-3-large" },
       { key: "bge-m3", label: "bge-m3 (lokal)" },
       { key: "minilm-l6-en", label: "minilm-l6-en (lokal)" },
       { key: "paraphrase-multilingual-mpnet", label: "paraphrase-multilingual-mpnet (lokal)" },
     ],
     rows: withAvg([
-      { chunking: "bge-m3", llm: "mistral", faithfulness: 0.749, answer_relevancy: 0.592, context_precision: 0.724, context_recall: 0.792, factual_correctness: 0.518 },
-      { chunking: "bge-m3", llm: "openai", faithfulness: 0.917, answer_relevancy: 0.652, context_precision: 0.724, context_recall: 0.792, factual_correctness: 0.460 },
-      { chunking: "minilm-l6-en", llm: "mistral", faithfulness: 0.599, answer_relevancy: 0.637, context_precision: 0.649, context_recall: 0.833, factual_correctness: 0.496 },
-      { chunking: "minilm-l6-en", llm: "openai", faithfulness: 0.856, answer_relevancy: 0.726, context_precision: 0.649, context_recall: 0.833, factual_correctness: 0.614 },
-      { chunking: "multilingual-e5-large", llm: "mistral", faithfulness: 0.800, answer_relevancy: 0.665, context_precision: 0.958, context_recall: 0.792, factual_correctness: 0.537 },
-      { chunking: "multilingual-e5-large", llm: "openai", faithfulness: 0.765, answer_relevancy: 0.796, context_precision: 0.958, context_recall: 0.792, factual_correctness: 0.539 },
-      { chunking: "paraphrase-multilingual-mpnet", llm: "mistral", faithfulness: 0.658, answer_relevancy: 0.521, context_precision: 0.681, context_recall: 0.750, factual_correctness: 0.465 },
-      { chunking: "paraphrase-multilingual-mpnet", llm: "openai", faithfulness: 0.704, answer_relevancy: 0.672, context_precision: 0.681, context_recall: 0.750, factual_correctness: 0.539 },
-      { chunking: "text-embedding-3-large", llm: "mistral", faithfulness: 0.888, answer_relevancy: 0.676, context_precision: 0.871, context_recall: 0.917, factual_correctness: 0.565 },
-      { chunking: "text-embedding-3-large", llm: "openai", faithfulness: 0.888, answer_relevancy: 0.806, context_precision: 0.871, context_recall: 0.917, factual_correctness: 0.617 },
-      { chunking: "text-embedding-3-small", llm: "mistral", faithfulness: 0.771, answer_relevancy: 0.690, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.413 },
-      { chunking: "text-embedding-3-small", llm: "openai", faithfulness: 0.778, answer_relevancy: 0.814, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.582 },
-      { chunking: "text-embedding-ada-002", llm: "mistral", faithfulness: 0.709, answer_relevancy: 0.727, context_precision: 0.753, context_recall: 0.875, factual_correctness: 0.552 },
-      { chunking: "text-embedding-ada-002", llm: "openai", faithfulness: 0.912, answer_relevancy: 0.735, context_precision: 0.753, context_recall: 0.875, factual_correctness: 0.515 },
+      { chunking: "bge-m3", llm: "openai", faithfulness: 0.810, answer_relevancy: 0.720, context_precision: 0.801, context_recall: 0.792, factual_correctness: 0.596 },
+      { chunking: "minilm-l6-en", llm: "openai", faithfulness: 0.758, answer_relevancy: 0.575, context_precision: 0.493, context_recall: 0.583, factual_correctness: 0.565 },
+      { chunking: "multilingual-e5-large", llm: "openai", faithfulness: 0.882, answer_relevancy: 0.736, context_precision: 0.882, context_recall: 0.792, factual_correctness: 0.622 },
+      { chunking: "paraphrase-multilingual-mpnet", llm: "openai", faithfulness: 0.622, answer_relevancy: 0.520, context_precision: 0.667, context_recall: 0.667, factual_correctness: 0.397 },
+      { chunking: "text-embedding-3-large", llm: "openai", faithfulness: 0.799, answer_relevancy: 0.817, context_precision: 0.850, context_recall: 0.792, factual_correctness: 0.547 },
+      { chunking: "text-embedding-3-small", llm: "openai", faithfulness: 0.840, answer_relevancy: 0.729, context_precision: 0.901, context_recall: 0.917, factual_correctness: 0.596 },
+      { chunking: "text-embedding-ada-002", llm: "openai", faithfulness: 0.809, answer_relevancy: 0.741, context_precision: 0.781, context_recall: 0.875, factual_correctness: 0.672 },
     ]),
   };
 
   const RETRIEVAL = {
-    fixedNote: "Parser, Chunking und Embedding-Modell bleiben auf dem Produktiv-Default fixiert (PyMuPDF4LLM, Header+Recursive 800, text-embedding-3-small) — variiert wird ausschließlich die Retrieval-Strategie. Läuft auf derselben Collection wie \"Chunking: Header+Recursive 800\", kein eigener Demo-Korpus nötig.",
+    fixedNote: "Korpus: Demo-Korpus (~53 Seiten). Restliche Pipeline fix: Parser PyMuPDF4LLM, Chunking Header+Recursive 800, Embedding text-embedding-3-small, Antwort-LLM GPT-4o-mini — variiert wird nur die Retrieval-Strategie.",
     categories: [
       { key: "rerank", label: "Rerank (Cross-Encoder)" },
       { key: "similarity", label: "Similarity" },
@@ -426,39 +413,35 @@
       { key: "mmr", label: "MMR (Produktiv)" },
     ],
     rows: withAvg([
-      { chunking: "mmr", llm: "mistral", faithfulness: 0.796, answer_relevancy: 0.655, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.482 },
-      { chunking: "mmr", llm: "openai", faithfulness: 0.750, answer_relevancy: 0.813, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.578 },
-      { chunking: "similarity", llm: "mistral", faithfulness: 0.844, answer_relevancy: 0.695, context_precision: 0.825, context_recall: 0.875, factual_correctness: 0.664 },
-      { chunking: "similarity", llm: "openai", faithfulness: 0.940, answer_relevancy: 0.877, context_precision: 0.825, context_recall: 0.875, factual_correctness: 0.642 },
-      { chunking: "rerank", llm: "mistral", faithfulness: 0.854, answer_relevancy: 0.794, context_precision: 0.826, context_recall: 1.000, factual_correctness: 0.704 },
-      { chunking: "rerank", llm: "openai", faithfulness: 0.898, answer_relevancy: 0.876, context_precision: 0.826, context_recall: 1.000, factual_correctness: 0.713 },
-      { chunking: "hybrid", llm: "mistral", faithfulness: 0.717, answer_relevancy: 0.673, context_precision: 0.809, context_recall: 0.875, factual_correctness: 0.613 },
-      { chunking: "hybrid", llm: "openai", faithfulness: 0.931, answer_relevancy: 0.796, context_precision: 0.809, context_recall: 0.875, factual_correctness: 0.644 },
+      { chunking: "mmr", llm: "openai", faithfulness: 0.856, answer_relevancy: 0.735, context_precision: 0.901, context_recall: 0.917, factual_correctness: 0.596 },
+      { chunking: "similarity", llm: "openai", faithfulness: 0.899, answer_relevancy: 0.876, context_precision: 0.864, context_recall: 1.000, factual_correctness: 0.619 },
+      { chunking: "rerank", llm: "openai", faithfulness: 0.938, answer_relevancy: 0.880, context_precision: 0.840, context_recall: 1.000, factual_correctness: 0.686 },
+      { chunking: "hybrid", llm: "openai", faithfulness: 0.781, answer_relevancy: 0.809, context_precision: 0.855, context_recall: 1.000, factual_correctness: 0.704 },
     ]),
   };
 
   const BEST_OF_BREED = {
-    fixedNote: "Kombiniert die vier Einzelsieger (Unstructured + Semantic Chunking + text-embedding-3-large + Rerank) zu einer Gesamt-Pipeline und vergleicht sie im selben RAGAS-Lauf gegen die frisch generierte Produktiv-Baseline (PyMuPDF4LLM + Header+Recursive 800 + text-embedding-3-small + MMR), über alle drei Antwort-LLMs. War in keinem der vier Einzelvergleiche in dieser Kombination getestet.",
+    fixedNote: "Korpus: Demo-Korpus (~53 Seiten). Baseline (Produktiv): PyMuPDF4LLM + Header+Recursive 800 + text-embedding-3-small + MMR. Best-of-Breed: Unstructured + Semantic Chunking + text-embedding-3-large + Rerank. Beide Pipelines je über drei Antwort-LLMs (GPT-4o-mini, Mistral, GPT-4o).",
     categories: [
       { key: "best_of_breed", label: "Best-of-Breed" },
       { key: "baseline", label: "Baseline (Produktiv)" },
     ],
     rows: withAvg([
-      { chunking: "baseline", llm: "mistral", faithfulness: 0.733, answer_relevancy: 0.696, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.590 },
-      { chunking: "baseline", llm: "openai", faithfulness: 0.764, answer_relevancy: 0.813, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.571 },
-      { chunking: "baseline", llm: "qwen", faithfulness: 0.826, answer_relevancy: 0.698, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.641 },
-      { chunking: "best_of_breed", llm: "mistral", faithfulness: 0.881, answer_relevancy: 0.812, context_precision: 0.912, context_recall: 1.000, factual_correctness: 0.542 },
-      { chunking: "best_of_breed", llm: "openai", faithfulness: 0.833, answer_relevancy: 0.878, context_precision: 0.912, context_recall: 1.000, factual_correctness: 0.643 },
-      { chunking: "best_of_breed", llm: "qwen", faithfulness: 0.866, answer_relevancy: 0.851, context_precision: 0.912, context_recall: 1.000, factual_correctness: 0.665 },
+      { chunking: "baseline", llm: "mistral", faithfulness: 0.799, answer_relevancy: 0.722, context_precision: 0.708, context_recall: 0.792, factual_correctness: 0.376 },
+      { chunking: "baseline", llm: "openai", faithfulness: 0.906, answer_relevancy: 0.789, context_precision: 0.708, context_recall: 0.792, factual_correctness: 0.508 },
+      { chunking: "baseline", llm: "gpt4o", faithfulness: 0.837, answer_relevancy: 0.774, context_precision: 0.708, context_recall: 0.792, factual_correctness: 0.522 },
+      { chunking: "best_of_breed", llm: "mistral", faithfulness: 0.746, answer_relevancy: 0.879, context_precision: 0.785, context_recall: 1.000, factual_correctness: 0.452 },
+      { chunking: "best_of_breed", llm: "openai", faithfulness: 0.896, answer_relevancy: 0.944, context_precision: 0.785, context_recall: 1.000, factual_correctness: 0.479 },
+      { chunking: "best_of_breed", llm: "gpt4o", faithfulness: 0.992, answer_relevancy: 0.914, context_precision: 0.785, context_recall: 1.000, factual_correctness: 0.624 },
     ]),
   };
 
   const LLM_COMPARISON = {
-    fixedNote: "Parser, Chunking, Embedding und Retrieval bleiben auf dem Produktiv-Default fixiert (PyMuPDF4LLM, Header+Recursive 800, text-embedding-3-small, MMR) — variiert wird ausschließlich das Antwort-LLM. ContextPrecision/ContextRecall sind für alle drei LLMs identisch (0.822/0.792), da sie nur vom Retrieval abhängen, nicht vom antwortenden Modell.",
+    fixedNote: "Korpus: Demo-Korpus (~53 Seiten). Restliche Pipeline fix: Parser PyMuPDF4LLM, Chunking Header+Recursive 800, Embedding text-embedding-3-small, Retrieval MMR — variiert wird nur das Antwort-LLM.",
     rows: [
-      { key: "qwen", label: "Qwen2.5-32B (kostenlos)", faithfulness: 0.826, answer_relevancy: 0.698, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.641 },
-      { key: "openai", label: "OpenAI (gpt-4o-mini)", faithfulness: 0.736, answer_relevancy: 0.807, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.582 },
-      { key: "mistral", label: "Mistral (mistral-small-latest)", faithfulness: 0.736, answer_relevancy: 0.683, context_precision: 0.822, context_recall: 0.792, factual_correctness: 0.534 },
+      { key: "gpt4o", label: "GPT-4o", faithfulness: 0.913, answer_relevancy: 0.764, context_precision: 0.708, context_recall: 0.792, factual_correctness: 0.516 },
+      { key: "openai", label: "GPT-4o-mini", faithfulness: 0.927, answer_relevancy: 0.788, context_precision: 0.708, context_recall: 0.792, factual_correctness: 0.492 },
+      { key: "mistral", label: "Mistral (mistral-small-latest)", faithfulness: 0.696, answer_relevancy: 0.730, context_precision: 0.708, context_recall: 0.792, factual_correctness: 0.384 },
     ],
   };
   LLM_COMPARISON.rows.forEach(r => { r.avg = METRICS.reduce((s, m) => s + r[m], 0) / METRICS.length; });
@@ -467,13 +450,13 @@
   function catLabel(dataset, key) { return (dataset.categories.find(c => c.key === key) || {}).label || key; }
 
   const DEFAULT_SERIES = [
-    { llm: "openai", cls: "bar-s1", color: css("--series-1"), name: "OpenAI" },
+    { llm: "openai", cls: "bar-s1", color: css("--series-1"), name: "GPT-4o-mini" },
     { llm: "mistral", cls: "bar-s2", color: css("--series-2"), name: "Mistral" },
   ];
   const THREE_LLM_SERIES = [
-    { llm: "openai", cls: "bar-s1", color: css("--series-1"), name: "OpenAI" },
+    { llm: "openai", cls: "bar-s1", color: css("--series-1"), name: "GPT-4o-mini" },
     { llm: "mistral", cls: "bar-s2", color: css("--series-2"), name: "Mistral" },
-    { llm: "qwen", cls: "bar-s3", color: css("--series-3"), name: "Qwen (kostenlos)" },
+    { llm: "gpt4o", cls: "bar-s3", color: css("--series-3"), name: "GPT-4o" },
   ];
 
   // ---------- Grouped horizontal bar chart ----------
@@ -514,7 +497,8 @@
       catText.textContent = cat.label;
       svg.appendChild(catText);
 
-      series.map((s, idx) => ({ ...s, dy: idx * (barH + gap) })).forEach(s => {
+      const sortedSeries = [...series].sort((a, b) => rowFor(dataset, cat.key, b.llm).avg - rowFor(dataset, cat.key, a.llm).avg);
+      sortedSeries.map((s, idx) => ({ ...s, dy: idx * (barH + gap) })).forEach(s => {
         const row = rowFor(dataset, cat.key, s.llm);
         const val = row.avg;
         const bw = Math.max(0, val * plotW);
@@ -540,88 +524,6 @@
         lbl.textContent = fmt3(val);
         svg.appendChild(lbl);
       });
-    });
-
-    container.appendChild(svg);
-  }
-
-  // ---------- Scatter: ContextPrecision vs ContextRecall ----------
-  function renderScatter(containerId, dataset, opts) {
-    opts = opts || {};
-    const container = document.getElementById(containerId);
-    container.innerHTML = "";
-    const width = opts.width || 700, height = opts.height || 380;
-    const margin = { top: 16, right: 24, bottom: 40, left: 48 };
-    const plotW = width - margin.left - margin.right;
-    const plotH = height - margin.top - margin.bottom;
-
-    const points = dataset.categories.map(cat => {
-      const row = rowFor(dataset, cat.key, "openai");
-      return { label: cat.label, precision: row.context_precision, recall: row.context_recall };
-    });
-
-    const pad = 0.05;
-    let xMin = Math.min(...points.map(p => p.precision)) - pad;
-    let xMax = Math.max(...points.map(p => p.precision)) + pad;
-    let yMin = Math.min(...points.map(p => p.recall)) - pad;
-    let yMax = Math.max(...points.map(p => p.recall)) + pad;
-    xMin = Math.max(0, Math.floor(xMin * 20) / 20);
-    xMax = Math.min(1, Math.ceil(xMax * 20) / 20);
-    yMin = Math.max(0, Math.floor(yMin * 20) / 20);
-    yMax = Math.min(1, Math.ceil(yMax * 20) / 20);
-
-    const xScale = v => margin.left + ((v - xMin) / (xMax - xMin)) * plotW;
-    const yScale = v => margin.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
-
-    const svg = svgEl("svg", { width: width, height: height, viewBox: "0 0 " + width + " " + height, role: "img", "aria-label": opts.ariaLabel || "" });
-
-    const step = 0.05;
-    for (let t = Math.ceil(xMin / step) * step; t <= xMax + 1e-9; t += step) {
-      const gx = xScale(t);
-      svg.appendChild(svgEl("line", { class: "gridline", x1: gx, x2: gx, y1: margin.top, y2: margin.top + plotH }));
-      const lx = svgEl("text", { class: "axis-label", x: gx, y: margin.top + plotH + 18, "text-anchor": "middle" });
-      lx.textContent = t.toFixed(2);
-      svg.appendChild(lx);
-    }
-    for (let t = Math.ceil(yMin / step) * step; t <= yMax + 1e-9; t += step) {
-      const gy = yScale(t);
-      svg.appendChild(svgEl("line", { class: "gridline", x1: margin.left, x2: margin.left + plotW, y1: gy, y2: gy }));
-      const ly = svgEl("text", { class: "axis-label", x: margin.left - 8, y: gy + 4, "text-anchor": "end" });
-      ly.textContent = t.toFixed(2);
-      svg.appendChild(ly);
-    }
-    svg.appendChild(svgEl("line", { class: "baseline", x1: margin.left, x2: margin.left, y1: margin.top, y2: margin.top + plotH }));
-    svg.appendChild(svgEl("line", { class: "baseline", x1: margin.left, x2: margin.left + plotW, y1: margin.top + plotH, y2: margin.top + plotH }));
-
-    const xTitle = svgEl("text", { class: "axis-label", x: margin.left + plotW / 2, y: height - 4, "text-anchor": "middle" });
-    xTitle.textContent = "ContextPrecision →";
-    svg.appendChild(xTitle);
-    const yTitle = svgEl("text", { class: "axis-label", x: 12, y: margin.top + plotH / 2, "text-anchor": "middle", transform: "rotate(-90 12 " + (margin.top + plotH / 2) + ")" });
-    yTitle.textContent = "ContextRecall →";
-    svg.appendChild(yTitle);
-
-    const dLo = Math.max(xMin, yMin), dHi = Math.min(xMax, yMax);
-    if (dHi > dLo) svg.appendChild(svgEl("line", { class: "diag", x1: xScale(dLo), y1: yScale(dLo), x2: xScale(dHi), y2: yScale(dHi) }));
-
-    points.forEach(p => {
-      const px = xScale(p.precision), py = yScale(p.recall);
-      svg.appendChild(svgEl("circle", { class: "point", cx: px, cy: py, r: 6 }));
-      const label = svgEl("text", { class: "point-label", x: px + 10, y: py - 8 });
-      label.textContent = p.label.replace(" (lokal)", "").replace(" (Produktiv)", "");
-      svg.appendChild(label);
-
-      const hit = svgEl("circle", { class: "hit", cx: px, cy: py, r: 16, tabindex: "0", role: "img",
-        "aria-label": p.label + ": ContextPrecision " + fmt3(p.precision) + ", ContextRecall " + fmt3(p.recall) });
-      const onEnter = (evt) => showTooltip(evt, p.label, [
-        { label: "ContextPrecision", value: fmt3(p.precision) },
-        { label: "ContextRecall", value: fmt3(p.recall) }
-      ]);
-      hit.addEventListener("pointermove", onEnter);
-      hit.addEventListener("pointerenter", onEnter);
-      hit.addEventListener("pointerleave", hideTooltip);
-      hit.addEventListener("focus", onEnter);
-      hit.addEventListener("blur", hideTooltip);
-      svg.appendChild(hit);
     });
 
     container.appendChild(svg);
@@ -654,10 +556,10 @@
     const tbody = document.createElement("tbody");
     dataset.categories.forEach(cat => {
       // Innerhalb jeder Kategorie nach Wert absteigend sortieren (nicht nach fixer
-      // Serienreihenfolge) - im Balkendiagramm bleibt OpenAI/Mistral/Qwen bewusst an
+      // Serienreihenfolge) - im Balkendiagramm bleibt GPT-4o-mini/Mistral/GPT-4o bewusst an
       // fester Position (vertikaler Vergleich über Kategorien hinweg), aber in der
-      // Tabelle soll die tatsächliche Rangfolge erkennbar sein (z. B. Qwen schlägt
-      // OpenAI/Mistral im Best-of-Breed-Tab, siehe docs/BEST_OF_BREED.md).
+      // Tabelle soll die tatsächliche Rangfolge erkennbar sein (z. B. GPT-4o schlägt
+      // GPT-4o-mini/Mistral im Best-of-Breed-Tab, siehe docs/BEST_OF_BREED.md).
       const sortedSeries = [...series].sort((a, b) => rowFor(dataset, cat.key, b.llm).avg - rowFor(dataset, cat.key, a.llm).avg);
       sortedSeries.forEach(s => {
         const row = rowFor(dataset, cat.key, s.llm);
@@ -748,7 +650,7 @@
     container.appendChild(svg);
   }
 
-  // ---------- LLM tab (single-series, no OpenAI/Mistral sub-split — LLM *is* the dimension) ----------
+  // ---------- LLM tab (single-series, no GPT-4o-mini/Mistral sub-split — LLM *is* the dimension) ----------
   function buildLlmTab() {
     const panel = document.getElementById("tab-llm");
     panel.innerHTML = "";
@@ -757,7 +659,6 @@
     section1.className = "card";
     section1.innerHTML =
       '<h2>Gesamtranking</h2>' +
-      '<p class="card-sub">Mittelwert über alle 5 RAGAS-Metriken pro Antwort-LLM, sortiert absteigend. Nur eine Farbe, da hier keine zweite LLM-Achse existiert — das LLM ist selbst die verglichene Dimension.</p>' +
       '<div class="callout">' + LLM_COMPARISON.fixedNote + '</div>' +
       '<div class="chart-scroll" style="margin-top:14px;"><div id="tab-llm-ranking"></div></div>';
     panel.appendChild(section1);
@@ -818,21 +719,16 @@
     const panel = document.getElementById(panelId);
     panel.innerHTML = "";
     const series = opts.series || DEFAULT_SERIES;
-    const llmNote = series.length === 3
-      ? "sortiert nach strategieweitem Durchschnitt (alle drei LLMs gemittelt), absteigend."
-      : "sortiert nach strategieweitem Durchschnitt (beide LLMs gemittelt), absteigend.";
-    const legendHtml = series.map((s, i) =>
-      '<div class="legend-item"><span class="legend-swatch s' + (i + 1) + '"></span>' + s.name + '</div>'
-    ).join("");
-    const scatterNote = series.length === 3
-      ? "ContextPrecision/ContextRecall hängen nur vom Retrieval ab, nicht vom LLM — ein Punkt je Variante (Werte identisch für alle drei LLMs). Punkte über der gestrichelten Diagonale gewichten Recall stärker, darunter Precision."
-      : "ContextPrecision/ContextRecall hängen nur vom Retrieval ab, nicht vom LLM — ein Punkt je Variante (Werte identisch für OpenAI/Mistral). Punkte über der gestrichelten Diagonale gewichten Recall stärker, darunter Precision.";
+    const legendHtml = series.length === 1
+      ? ""
+      : series.map((s, i) =>
+          '<div class="legend-item"><span class="legend-swatch s' + (i + 1) + '"></span>' + s.name + '</div>'
+        ).join("");
 
     const section1 = document.createElement("section");
     section1.className = "card";
     section1.innerHTML =
       '<h2>Gesamtranking</h2>' +
-      '<p class="card-sub">Mittelwert über alle 5 RAGAS-Metriken, ' + llmNote + '</p>' +
       '<div class="callout">' + opts.fixedNote + '</div>' +
       '<div class="legend" style="margin-top:14px;">' + legendHtml + '</div>' +
       '<div class="chart-scroll"><div id="' + panelId + '-ranking"></div></div>';
@@ -840,26 +736,20 @@
 
     const section2 = document.createElement("section");
     section2.className = "card";
-    section2.innerHTML =
-      '<h2>Retrieval-Qualität: Precision vs. Recall</h2>' +
-      '<p class="card-sub">' + scatterNote + '</p>' +
-      '<div class="chart-scroll"><div id="' + panelId + '-scatter"></div></div>';
+    section2.innerHTML = '<h2>Rohdaten</h2><div id="' + panelId + '-table"></div>';
     panel.appendChild(section2);
 
-    const section3 = document.createElement("section");
-    section3.className = "card";
-    section3.innerHTML = '<h2>Rohdaten</h2><div id="' + panelId + '-table"></div>';
-    panel.appendChild(section3);
-
     renderGroupedBars(panelId + "-ranking", dataset, { ariaLabel: "Gesamtranking " + panelId, series: series });
-    renderScatter(panelId + "-scatter", dataset, { ariaLabel: "Precision vs Recall " + panelId });
     renderTable(panelId + "-table", dataset, { series: series });
   }
 
-  buildTab("tab-parser", PARSER, { fixedNote: PARSER.fixedNote });
-  buildTab("tab-chunking", CHUNKING, { fixedNote: CHUNKING.fixedNote });
-  buildTab("tab-embedding", EMBEDDING, { fixedNote: EMBEDDING.fixedNote });
-  buildTab("tab-retrieval", RETRIEVAL, { fixedNote: RETRIEVAL.fixedNote });
+  const ONE_LLM_SERIES = [
+    { llm: "openai", cls: "bar-s1", color: css("--series-1"), name: "GPT-4o-mini" },
+  ];
+  buildTab("tab-parser", PARSER, { fixedNote: PARSER.fixedNote, series: ONE_LLM_SERIES });
+  buildTab("tab-chunking", CHUNKING, { fixedNote: CHUNKING.fixedNote, series: ONE_LLM_SERIES });
+  buildTab("tab-embedding", EMBEDDING, { fixedNote: EMBEDDING.fixedNote, series: ONE_LLM_SERIES });
+  buildTab("tab-retrieval", RETRIEVAL, { fixedNote: RETRIEVAL.fixedNote, series: ONE_LLM_SERIES });
   buildTab("tab-bob", BEST_OF_BREED, { fixedNote: BEST_OF_BREED.fixedNote, series: THREE_LLM_SERIES });
   buildLlmTab();
 
@@ -867,11 +757,11 @@
   (function renderOverview() {
     const container = document.getElementById("chart-overview");
     const items = [
-      { label: "Parser: Unstructured + OpenAI", value: 0.785 },
-      { label: "Chunking: Semantic + OpenAI", value: 0.821 },
-      { label: "Embedding: text-embedding-3-large + OpenAI", value: 0.820 },
-      { label: "Retrieval: Rerank + OpenAI", value: 0.863 },
-    ];
+      { label: "Retrieval: Rerank", value: 0.869 },
+      { label: "Chunking: Semantic", value: 0.814 },
+      { label: "Parser: Unstructured", value: 0.801 },
+      { label: "Embedding: text-embedding-3-small (Produktiv)", value: 0.797 },
+    ].sort((a, b) => b.value - a.value);
     const width = 720;
     const barH = 24, groupGap = 22, leftLabelW = 260, rightPad = 46, topPad = 8, bottomPad = 26;
     const rowH = barH + groupGap;

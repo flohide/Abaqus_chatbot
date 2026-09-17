@@ -1,16 +1,32 @@
-"""RAGAS-Metriken-Setup: fester OpenAI-Richter für alle Varianten.
+"""RAGAS-Metriken-Setup: Richter je Studie bewusst unterschiedlich gewaehlt.
 
-Der Richter (Judge-LLM + Embeddings) wird bewusst für ALLE 8 Parser×LLM-
-Kombinationen konstant gehalten (immer OpenAI/Hub), unabhängig davon, ob
-die zu bewertende Antwort von OpenAI oder Mistral stammt. Würde man
-stattdessen je nach getesteter Variante das jeweils gleiche Modell auch als
-Richter einsetzen, entstünde ein Self-Preference-Bias (LLMs bewerten eigene
-Ausgaben tendenziell günstiger) — die Ergebnisse zwischen den Varianten
-wären dann nicht mehr fair vergleichbar.
+Vier der sechs Vergleichsstudien (Parser, Chunking, Embedding, Retrieval)
+laufen mit dem festen OpenAI-Richter (gpt-4o-mini) - dort ist das
+Antwort-LLM fuer alle verglichenen Varianten ohnehin konstant, ein
+Self-Preference-Bias wuerde alle Varianten gleichermassen betreffen und die
+relative Rangfolge kaum verzerren (siehe docs/RAGAS.md).
+
+Der Antwort-LLM-Vergleich (docs/LLM.md) und Best-of-Breed
+(docs/BEST_OF_BREED.md) laufen dagegen bewusst mit einem unabhaengigen
+Claude-Richter (provider="anthropic") - dort treten OpenAI-Modelle direkt
+gegen Mistral an, und ein Richter aus der OpenAI-Familie waere selbst
+Kandidat und Richter zugleich (Self-Preference-Bias, empirisch bestaetigt:
+siehe Projektverlauf - GPT-4os Vorsprung schrumpfte bzw. kehrte sich unter
+dem unabhaengigen Richter um). Claude ist bei keinem der Vergleiche selbst
+Antwort-LLM-Kandidat.
+
+Kostenabwaegung: Claude Sonnet 5 kostet pro Token ca. 20-25x mehr als
+gpt-4o-mini (bestaetigt: $3/$15 vs. $0.15/$0.60 pro 1M Tokens) - deshalb
+bewusst nur fuer die zwei Studien mit echtem Bias-Risiko, nicht global.
+
+Die Embeddings fuer AnswerRelevancy bleiben in allen Faellen bei OpenAI -
+dort geht es um reine Kosinus-Aehnlichkeit, keine qualitative Bewertung,
+also kein Self-Preference-Risiko.
 """
 
 from dataclasses import dataclass
 
+from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 from ragas.cache import DiskCacheBackend
 from ragas.embeddings import OpenAIEmbeddings as RagasOpenAIEmbeddings
@@ -35,12 +51,69 @@ class EvalMetrics:
     factual_correctness: FactualCorrectness
 
 
-def build_judge_metrics(cache_dir: str = ".ragas_cache") -> EvalMetrics:
-    """Baut alle 5 Metriken mit einem festen OpenAI-Richter (gecacht)."""
+def _build_openai_judge(cache_dir: str | None):
     client = AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-    cache = DiskCacheBackend(cache_dir=cache_dir)
+    cache = DiskCacheBackend(cache_dir=cache_dir or ".ragas_cache")
     judge = llm_factory(settings.llm_model, provider="openai", client=client, cache=cache)
-    embeddings = RagasOpenAIEmbeddings(client=client, model=settings.embedding_model)
+    return judge, client
+
+
+def _build_anthropic_judge(cache_dir: str | None):
+    if not settings.anthropic_api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY fehlt in .env - der Claude-Richter wird fuer den "
+            "LLM-Vergleich und Best-of-Breed benoetigt, siehe eval/metrics.py."
+        )
+    if cache_dir is None:
+        # Cache-Verzeichnis ist per Richter-Modell namensraumgetrennt statt eines
+        # global geteilten ".ragas_cache" - ragas' eigener cacher() generiert den
+        # Cache-Key nur aus Funktionsname + Aufruf-Argumenten (Frage/Kontext/
+        # Antwort/Referenz), NICHT aus der Richter-Instanz selbst. Ein geteilter
+        # Cache-Ordner ueber einen Richter-Wechsel hinweg liefert deshalb
+        # stillschweigend alte Urteile des vorherigen Richters zurueck, sobald
+        # (Frage, Kontext, [Antwort]) mit einem frueheren Lauf uebereinstimmt.
+        # Empirisch beobachtet: 73-93% alte Cache-Treffer bei geteiltem Cache.
+        cache_dir = f".ragas_cache_{settings.judge_model}"
+    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    cache = DiskCacheBackend(cache_dir=cache_dir)
+    judge = llm_factory(settings.judge_model, provider="anthropic", client=client, cache=cache)
+    # Kompatibilitäts-Fix (analog zu _ragas_compat.py): ragas/instructor
+    # schicken standardmäßig temperature/top_p an Messages.create() mit -
+    # die installierte anthropic-SDK (1.5.0) nimmt beide Parameter nicht
+    # mehr entgegen (TypeError: unexpected keyword argument 'temperature'),
+    # ohne diesen Pop schlagen alle 5 Metriken fehl.
+    judge.model_args.pop("temperature", None)
+    judge.model_args.pop("top_p", None)
+    # ragas/instructor-Default (1024) reicht bei Faithfulness/FactualCorrectness
+    # nicht immer aus (Claim-Zerlegung bei laengeren Antworten) - beobachtet als
+    # "The output is incomplete due to a max_tokens length limit." bei ca. 4% der
+    # Instanzen im Best-of-Breed-Demo-Rerun (14/360 Zellen).
+    judge.model_args["max_tokens"] = 4096
+    return judge, None
+
+
+def build_judge_metrics(provider: str = "openai", cache_dir: str | None = None) -> EvalMetrics:
+    """Baut alle 5 Metriken mit einem festen Richter (gecacht).
+
+    `provider="openai"` (Default): gpt-4o-mini, wie urspruenglich fuer alle
+    sechs Studien. `provider="anthropic"`: unabhaengiger Claude-Richter, nur
+    fuer den LLM-Vergleich und Best-of-Breed vorgesehen.
+    """
+    if provider == "anthropic":
+        judge, client = _build_anthropic_judge(cache_dir)
+    elif provider == "openai":
+        judge, client = _build_openai_judge(cache_dir)
+    else:
+        raise ValueError(f"Unbekannter Richter-Provider: {provider!r} (erwartet 'openai' oder 'anthropic')")
+
+    # Fuer provider="openai" liefert der Richter-Client bereits einen
+    # passenden AsyncOpenAI-Client - wiederverwenden statt einen zweiten
+    # aufzubauen (anthropic liefert keinen OpenAI-Client, dafuer bleibt der
+    # eigene Embeddings-Client noetig).
+    embeddings_client = client if provider == "openai" else AsyncOpenAI(
+        api_key=settings.openai_api_key, base_url=settings.openai_base_url
+    )
+    embeddings = RagasOpenAIEmbeddings(client=embeddings_client, model=settings.embedding_model)
 
     return EvalMetrics(
         faithfulness=Faithfulness(llm=judge),

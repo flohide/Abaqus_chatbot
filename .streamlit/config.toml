@@ -1,0 +1,8 @@
+# Aktiviert Streamlits eingebautes Static-File-Serving (Dateien unter
+# ./static/ werden unter http://<host>:<port>/app/static/<pfad> ausgeliefert).
+# Wird von app.py fuer die PDF-Quellen-Links gebraucht: file://-Links werden
+# von modernen Browsern blockiert, wenn die Seite selbst ueber http(s)://
+# laeuft (siehe src/rag_manual_bot/citations.py) - ueber diesen Static-Server
+# ausgelieferte http(s)://-Links sind davon nicht betroffen.
+[server]
+enableStaticServing = true

@@ -1,0 +1,569 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Sprache & Encoding ---
+\usepackage[ngerman]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% --- Layout ---
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% --- Tabellen & Listen ---
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\setlist[itemize]{leftmargin=1.5em, itemsep=0.2em, topsep=0.3em}
+
+% --- Code ---
+\usepackage{listings}
+\usepackage{xcolor}
+\lstdefinestyle{code}{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    columns=fullflexible,
+    keywordstyle=\color{blue!60!black}\bfseries,
+    commentstyle=\color{gray},
+    stringstyle=\color{green!40!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    tabsize=4,
+}
+\lstset{style=code}
+
+% --- Grafik & Diagramme ---
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows.meta,positioning}
+
+% --- Mathe ---
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% --- Links (immer als letztes Paket) ---
+\usepackage[hidelinks]{hyperref}
+
+\title{Abaqus Handbuch-Chatbot \\ \large Ein Retrieval-Augmented-Generation-System zur Beantwortung von Bedienungsfragen zur FEA-Software Abaqus}
+\author{
+    Florian Heithoff \\[0.3em]
+    \small Matrikelnummer: 30483505 \\
+    \small NLP-Studienmodul \\
+    \small Fachhochschule Südwestfalen \\
+    \small Betreuer: Prof. Dr. C. Gawron
+}
+\date{03. September 2026}
+
+\begin{document}
+% Deaktiviert babel/ngerman's "-Shorthands (z. B. "a, "s, "I) - das Dokument
+% nutzt durchgängig direkte UTF-8-Umlaute/ß und verwendet " stattdessen als
+% gewöhnliches Anführungszeichen (sonst würde z. B. "Ist ... zu Ïst).
+\shorthandoff{"}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Einleitung}
+% =====================================================================
+
+\subsection{Über Abaqus}
+
+Abaqus ist eine Simulationssoftware aus der Strukturmechanik, die mithilfe der
+Finite-Elemente-Methode (FEM) strukturmechanische Problemstellungen numerisch
+löst. Eingesetzt wird sie vor allem in der Konstruktion und Entwicklung von
+mechanisch belasteten Bauteilen. Sie erlaubt es, deren Verhalten unter Last bereits am digitalen Modell zu prüfen, bevor ein physischer
+Prototyp gebaut wird. Abaqus ist eine komplexe Software mit zahlreichen Modulen, Optionen und einer umfangreichen
+Keyword-/Input-Deck-Syntax (siehe \texttt{Abaqus2017\_KEYWORDS.pdf}), deren
+sichere Bedienung entsprechend anspruchsvoll ist.
+
+\subsection{Motivation und Zielsetzung}
+
+Die offiziellen Abaqus-Handbücher umfassen mehrere tausend Seiten, verteilt
+auf mehrere PDF-Dokumente. Eine reine Volltextsuche im PDF-Reader findet
+zwar Fundstellen, liefert aber keine kontextuelle Antwort auf eine konkrete
+Bedienungsfrage. Ziel dieser Arbeit ist daher ein Chatbot, der Fragen in
+natürlicher Sprache beantwortet, und zwar ausschließlich auf Basis der
+offiziellen Handbücher und nicht aus dem "Weltwissen" des zugrunde liegenden
+Sprachmodells. Zwei Eigenschaften sind für die Antwortqualität zentral: Eine
+seitengenaue Quellenangabe, die die Antwort im Original nachprüfbar macht,
+und ein Gesprächsgedächtnis, das Folgefragen versteht. Halluzinationen wird
+dabei durch einen strikten System-Prompt entgegengewirkt, sobald der abgerufene Kontext die
+Frage nicht abdeckt.
+
+Über diese Grundfunktion hinaus ist jede Komponente der Verarbeitungspipeline
+-- Parser, Chunking, Embedding, Retrieval und Antwort-LLM -- bewusst
+austauschbar gestaltet. Das erlaubt es, für jede Komponente empirisch zu
+prüfen, welche Variante die beste Antwortqualität liefert.
+
+% =====================================================================
+\section{Vorgehen}
+\label{sec:vorgehen}
+% =====================================================================
+
+\subsection{Methodisches Vorgehen}
+
+Das Projekt folgt einem iterativen Vorgehen in drei Phasen. Zunächst wird
+eine funktionierende Produktiv-Baseline mit allen fünf Pipeline-Stufen --
+Parser, Chunking, Embedding, Retrieval und Antwort-LLM -- aufgebaut. Darauf
+aufbauend wird systematisch je eine Pipeline-Dimension gegen diese Baseline
+variiert und die Auswirkung quantitativ per RAGAS gemessen. Abschließend
+werden die jeweiligen Einzelsieger im Best-of-Breed-Experiment
+zusammengeführt. Jede Designentscheidung ist dadurch nicht nur begründet,
+sondern nachträglich auch empirisch geprüft.
+
+\subsection{Design-Prinzip: isolierte Ein-Dimensions-Vergleiche}
+
+Jede der sechs Vergleichsstudien variiert genau eine Dimension, während alle
+übrigen Pipeline-Stufen auf dem jeweiligen Produktiv-Default fixiert bleiben.
+Ziel ist es, gemessene Effekte einzelnen Ursachen zurechenbar zu halten,
+statt sie in einer vollen Kombinatorik zu vermischen, da mit jeweils vier bis sieben Varianten eine vollständige Kombinatorik zu aufwändig wäre.
+Wechselwirkungen zwischen mehreren gleichzeitig veränderten Dimensionen werden dadurch nicht
+erfasst und werden erst im abschließenden Best-of-Breed-Experiment
+(Abschnitt~\ref{sec:best-of-breed}) sichtbar.
+
+\subsection{Demo-Korpus vs. Produktivkorpus}
+
+Der Produktivkorpus umfasst vier vollständige Abaqus-Handbücher mit ca.
+5.100 Seiten und 15.408 Chunks. Alle sechs Vergleichsstudien laufen jedoch
+nicht auf diesem vollen Korpus, sondern auf einem festen, deterministisch
+zusammengestellten Demo-Korpus von ca. 53 Seiten. Der kleinere Korpus wurde gewählt, da Unstructured (\texttt{hi\_res}) auf dem vollen
+Korpus mit geschätzt mehreren Stunden Laufzeit nicht praktikabel wäre --
+Docling ist mit warmem Modell-Cache zwar ebenfalls deutlich langsamer als
+PyMuPDF4LLM, mit geschätzt rund einer Stunde für den vollen Korpus aber
+grundsätzlich machbar (siehe \texttt{docs/PARSER.md}). Zusätzlich wären auch RAGAS-Läufe mit LLM-Richter über
+mehrere Kombinationen hinweg  auf dem vollen Korpus zeit- und
+kostenintensiv. Um trotz der reduzierten Größe aussagekräftig zu bleiben,
+wurde der Demo-Korpus gezielt aus genau den Inhaltstypen zusammengesetzt,
+die sich zuvor als unterschiedlich schwierig erwiesen hatten -- darunter
+TOC-Tabellen, linienlose Mini-Tabellen, ein vollständiges Tutorial-Kapitel
+sowie ein Analyse-Kapitel.
+
+% =====================================================================
+\section{Das RAG-System: Architektur}
+\label{sec:architektur}
+% =====================================================================
+
+\subsection{Systemüberblick}
+
+Das System besteht aus zwei vollständig entkoppelten Phasen. In der
+\textbf{Ingestion} -- einmalig ausgeführt bzw. wiederholt bei geänderten
+PDFs -- durchlaufen die Handbücher eine feste Kette: Ein Parser wandelt die
+PDFs in Text um, ein Chunker zerlegt diesen Text in handhabbare Abschnitte,
+ein Embedding-Modell wandelt jeden Abschnitt in einen Vektor um, und das
+Ergebnis landet in einem persistenten Chroma-Vectorstore. In der
+\textbf{Chat-Session} greift der Bot ausschließlich lesend auf diesen fertigen
+Vectorstore zu -- ohne Rückwirkung auf die Wissensbasis während des Chats.
+Eine Nutzerfrage durchläuft dabei zunächst einen Contextualize-Step, der
+Folgefragen anhand des Gesprächsverlaufs eigenständig verständlich macht,
+wird anschließend vom Retriever gegen den Vectorstore aufgelöst und
+zusammen mit dem gefundenen Kontext an eine Answer-Chain übergeben, die aus
+System-Prompt, Kontext und Frage die endgültige Antwort samt
+Quellenangaben generiert.
+
+\subsection{Zentrale Designentscheidungen}
+
+Neben den fünf austauschbaren Pipeline-Stufen (Abschnitt~\ref{sec:untersuchte-varianten})
+enthält das System eine Reihe infrastruktureller Entscheidungen, die
+bewusst \emph{nicht} zum Gegenstand eines Vergleichs gemacht wurden, weil
+sie den Kern der RAG-Pipeline selbst nicht betreffen, sondern deren
+technisches Fundament bilden. Sie sind für alle in
+Abschnitt~\ref{sec:vergleiche} untersuchten Varianten gleichermaßen
+gültig und werden in keiner der sechs Vergleichsstudien verändert:
+
+\begin{itemize}
+    \item \textbf{Vektor-DB}: Chroma (lokal, persistent, SQLite-basiert) -- kein Serverbetrieb nötig, native LangChain-Integration, Metadaten-Filterung
+    \item \textbf{RAG-Orchestrierung}: LCEL-Runnables statt \texttt{langchain.chains} (in LangChain~$\geq$1.0 entfernt).
+    \item \textbf{Conversation Memory}: einfache Nachrichtenliste innerhalb der CLI-Session
+\end{itemize}
+
+\subsection{Untersuchte Pipeline-Varianten}
+\label{sec:untersuchte-varianten}
+
+Im Gegensatz dazu wurden genau die fünf Stufen, die den eigentlichen
+Verarbeitungsweg von der PDF-Seite bis zur fertigen Antwort ausmachen,
+bewusst austauschbar gestaltet: Für jede von ihnen existiert im Code eine
+Registry mehrerer gleichwertiger Implementierungen (Abschnitt~\ref{sec:code}),
+sodass sich jede Stufe unabhängig von den übrigen gegen Alternativen testen
+lässt. Diese fünf Stufen sind zugleich die fünf Dimensionen der
+Vergleichsstudien aus Abschnitt~\ref{sec:vergleiche}, wo die jeweils
+getesteten Varianten und der eingesetzte Produktiv-Default im Detail
+aufgeführt sind. An dieser Stelle nur die Übersicht, wie viele Varianten
+je Dimension untersucht wurden:
+
+\begin{itemize}
+    \item PDF-Parser -- 4 getestete Varianten
+    \item Chunking-Strategie -- 6 getestete Varianten
+    \item Embedding-Modell -- 7 getestete Varianten
+    \item Retrieval-Strategie -- 4 getestete Varianten
+    \item Antwort-LLM -- 3 getestete Varianten
+\end{itemize}
+
+% =====================================================================
+\section{Implementierung}
+\label{sec:code}
+% =====================================================================
+
+\subsection{Projektstruktur}
+
+Der Kern der Anwendung ist als eigenständiges Python-Paket
+\texttt{src/rag\_manual\_bot/} organisiert und darin in vier funktionale
+Bereiche unterteilt. \texttt{scripts/}, \texttt{tests/}, \texttt{app.py}
+und \texttt{main.py} sind nicht Teil dieses
+Pakets, sondern liegen als eigenständige Verzeichnisse bzw. Dateien direkt
+im Projekt-Root. Sie importieren das Paket und nutzen dessen Funktionalitäten.
+
+\begin{lstlisting}[numbers=none, basicstyle=\ttfamily\scriptsize, frame=single, breaklines=true]
+Abaqus_chatbot/
+|-- src/rag_manual_bot/     <- das Python-Paket
+|   |-- ingestion/          Loader, Chunker, Parser-/Chunking-/Embedding-Backends
+|   |-- rag/                Vectorstore, Retriever, Retrieval-Backends, LCEL-Kette
+|   |-- eval/               RAGAS-Anbindung, Evaluations-Datensatz, Metriken
+|   |-- citations.py        Quellen-Links
+|   `-- cli/chat.py         Terminal-Chat-Oberflaeche
+|
+|-- scripts/                CLI-Entry-Points fuer Ingestion, Demo-Korpus-Aufbau, RAGAS-Laeufe
+|-- tests/                  51 offline lauffaehige Tests
+|-- app.py                  Frontend-Entry-Point
+`-- main.py                 Terminal-Entry-Point
+\end{lstlisting}
+
+\subsection{Zentrale Code-Bausteine}
+
+Dieser Abschnitt beschreibt, wie die in Abschnitt~\ref{sec:architektur}
+konzeptionell vorgestellten Komponenten konkret im Code umgesetzt sind --
+mit Fokus auf Implementierungsdetails, Funktionsnamen und technische
+Kniffe je Baustein.
+
+\subsubsection{Loader}
+
+Die Kernfunktion \texttt{load\_pdf()} in \texttt{ingestion/loader.py}
+kombiniert zwei Bibliotheken: \texttt{pymupdf4llm} liefert den
+Markdown-Text pro Seite, \texttt{pymupdf} zusätzlich die im PDF
+eingebetteten Page-Labels, deren Auflösung über
+\texttt{doc[pdf\_index].get\_label()} erfolgt -- mit Fallback auf die
+sequenzielle Position, falls kein Label vorhanden ist. Rückgabetyp ist
+eine Liste von \texttt{PageDocument}-Objekten (Text, Quelldatei, gedruckte
+Seitenzahl); leere Seiten werden bereits hier herausgefiltert, bevor sie
+in den Chunker gelangen.
+
+\subsubsection{Chunker}
+
+Die Kernfunktion \texttt{chunk\_pages()} in \texttt{ingestion/chunker.py}
+ist nur ein dünner Wrapper um
+\texttt{ingestion/chunking\_backends/header\_recursive\_backend.py} mit
+den Produktiv-Settings (\texttt{CHUNK\_SIZE}, \texttt{CHUNK\_OVERLAP}) --
+dieselbe Backend-Funktion ist zusätzlich unter zwei weiteren
+Größenvarianten sowie drei strukturell anderen Chunking-Strategien
+registriert (siehe Abschnitt~\ref{sec:code} zum Registry-Pattern).
+
+\subsubsection{Vectorstore}
+
+Die Kernfunktionen \texttt{build\_vectorstore()} und
+\texttt{load\_vectorstore()} in \texttt{rag/vectorstore.py} persistieren
+lokal über Chroma (SQLite-basiert). Beide tragen einen optionalen
+\texttt{embeddings}-Parameter (eine fertige \texttt{Embeddings}-Instanz
+statt eines Modellnamens), da der Vectorstore zwingend mit demselben
+Embeddings-Objekt geladen werden muss, mit dem er aufgebaut wurde;
+\texttt{build\_vectorstore()} löscht vor dem Neuaufbau alle bestehenden
+Einträge (\texttt{store.delete(ids=existing\_ids)}) und fügt Dokumente in
+Batches von 200 ein.
+
+\subsubsection{Prompts}
+
+\texttt{rag/prompts.py} definiert zwei getrennte Prompt-Templates für die
+zwei Aufgaben der Kette: Der Contextualize-Prompt formuliert Folgefragen
+anhand des Verlaufs eigenständig um, ohne sie zu beantworten; der
+Answer-Prompt legt die Systemrolle fest ("technischer Assistent für
+Abaqus"), erzwingt Kontext-Bindung und ein explizites "Ich weiß es nicht"
+bei fehlender Abdeckung. Beide binden den bisherigen Gesprächsverlauf über
+\texttt{MessagesPlaceholder("chat\_history")} als vollwertige
+Chat-Nachrichten ein, nicht als reinen Textblock.
+
+\subsubsection{LCEL-Kette}
+
+Die Kette wird in \texttt{rag/chain.py}, Funktion
+\texttt{build\_rag\_chain(vectorstore, llm\_provider,
+retrieval\_strategy)}, schrittweise über verkettete
+\texttt{RunnablePassthrough.assign(...)}-Aufrufe konstruiert; eine
+\texttt{RunnableBranch} überspringt dabei den Contextualize-Schritt bei
+leerem Gesprächsverlauf und spart so einen unnötigen LLM-Call. Jeder
+\texttt{.assign(...)}-Schritt reichert das durchlaufende Dict um ein
+weiteres Feld an (\texttt{standalone\_question}, \texttt{source\_documents},
+\texttt{context}, \texttt{answer}). \texttt{llm\_provider} und
+\texttt{retrieval\_strategy} werden als Parameter durchgereicht und wählen
+aus den jeweiligen Registries (Abschnitt~\ref{sec:code}) -- derselbe
+Kettenaufbau bedient damit sowohl den Produktivbetrieb als auch alle
+Vergleichsstudien.
+
+\subsubsection{Source-Tracking}
+
+\texttt{format\_docs()} baut aus den abgerufenen Chunks den nummerierten
+Kontextblock für das LLM, inklusive Quelle und Seitenzahl als Zitat;
+\texttt{citations.py} erzeugt daraus eine klickbare \texttt{file://}-URL
+mit PDF-Seitenanker (\texttt{\#page=N}). Der Anker muss sich auf die
+physische Seitenposition beziehen statt auf das gedruckte Label, da
+PDF-Viewer \texttt{\#page=N} als reinen Dateiindex interpretieren -- die
+Pipeline führt daher beide Werte parallel mit. \texttt{\_format\_sources()}
+(in \texttt{cli/chat.py} bzw. \texttt{app.py}) dedupliziert die Quellen
+abschließend nach Datei und Seite, wobei die Reihenfolge der ersten
+Nennung erhalten bleibt.
+
+\subsection{Austauschbare Komponenten (Registry-Pattern)}
+
+Ein einheitliches Implementierungsprinzip zieht sich durch alle fünf
+austauschbaren Pipeline-Stufen: Für jede Stufe existiert eine Registry --
+ein Dictionary, das einen Namen auf eine Implementierung oder Factory
+abbildet. Neue Varianten werden als zusätzlicher Registry-Eintrag ergänzt,
+ohne den übrigen Code zu verändern; genau das ermöglicht denselben
+Code-Pfad sowohl für den Aufbau der Vergleichs-Collections als auch für
+die automatisierten RAGAS-Vergleiche. Konkret:
+
+\begin{itemize}
+    \item \texttt{parser\_backends/}: 4 Parser mit identischer Schnittstelle \texttt{parse(pdf\_path) -> dict[int, str]}
+    \item \texttt{chunking\_backends/}: 6 Chunking-Strategien
+    \item \texttt{embedding\_models.py::EMBEDDING\_BACKENDS}: 7 Embedding-Modelle (3 OpenAI-Factories, 4 lokale HuggingFace-Factories mit Lazy-Import)
+    \item \texttt{retrieval\_backends.py::RETRIEVAL\_BACKENDS}: 4 Retrieval-Strategien
+    \item \texttt{rag/llms.py::get\_llm(provider)}: 3 Antwort-LLM-Provider (OpenAI, Mistral, GPT-4o)
+\end{itemize}
+
+\subsection{Tests}
+
+Die Testsuite (51 Tests) läuft vollständig offline -- es wird kein echter
+API-Call gegen OpenAI oder ein anderes Modell ausgeführt. Möglich macht das
+\texttt{tests/conftest.py}, das einen Dummy-\texttt{OPENAI\_API\_KEY} setzt,
+damit das beim Import validierende \texttt{Settings}-Modul auch ohne
+echten Key geladen werden kann, sowie eine selbstgeschriebene, deterministische
+\texttt{FakeEmbeddings}-Klasse anstelle echter Embedding-API-Aufrufe.
+Abgedeckt sind unter anderem die Chunker-Grundlogik, alle
+Chunking-Backends, die Embedding-Modell-Registry, die Retrieval-Backends,
+die LLM-Provider-Auswahl, die Custom-Demo-Kombinationslogik sowie der
+Eval-Datensatz. Ausführung über \texttt{python -m pytest tests/ -v}.
+
+% =====================================================================
+\section{Untersuchte Komponenten}
+\label{sec:vergleiche}
+% =====================================================================
+
+Für jede der fünf austauschbaren Pipeline-Stufen aus
+Abschnitt~\ref{sec:untersuchte-varianten} wurden mehrere konkrete
+Implementierungen gegeneinander getestet. Dieses Kapitel listet je
+Dimension, \emph{welche} Varianten untersucht wurden und markiert die
+jeweilige Produktiv-Default-Wahl; die zugehörige RAGAS-Methodik und die
+gemessenen Ergebnisse folgen in Kapitel~\ref{sec:validierung}.
+
+\subsection{PDF-Parser}
+
+Der Parser überführt jede Handbuchseite aus dem PDF in maschinenlesbaren Text.
+
+\begin{itemize}
+    \item \textbf{PyMuPDF4LLM (Produktiv-Default)}: wandelt PDF-Seiten seitenweise in Markdown um, erhält dabei Überschriften, Tabellen und Seitenzahlen
+    \item \textbf{Docling}: Dokumentenkonvertierungs-Toolkit mit Deep-Learning-basierter Layout- und Strukturerkennung
+    \item \textbf{pdfplumber}: Python-Bibliothek mit Fokus auf präzise Extraktion von Text und Tabellen anhand der PDF-Koordinaten
+    \item \textbf{Unstructured}: allgemeines Dokument-Partitionierungs-Framework, hier im rechenintensiveren \texttt{hi\_res}-Modus mit eigenem Layout-Erkennungsmodell getestet
+\end{itemize}
+
+\subsection{Chunking-Strategien}
+
+Die Chunking-Strategie zerlegt den geparsten Text in einzelne, embedding-fähige Abschnitte.
+
+\begin{itemize}
+    \item \textbf{Header+Recursive (Produktiv-Default)}: Hybrid aus Markdown-Header-Split und rekursivem Zeichen-Split als Fallback für überlange Abschnitte; getestet in drei Größenvarianten (400/800/1600 Zeichen)
+    \item \textbf{Recursive-only}: rein zeichenbasierte rekursive Aufteilung ohne Berücksichtigung von Überschriften, als naive Baseline
+    \item \textbf{Token-basiert}: Chunk-Grenzen anhand der Tokenzahl statt der Zeichenzahl
+    \item \textbf{Semantic Chunking}: embedding-basierte Bestimmung der Chunk-Grenzen, setzt Trennstellen dort, wo sich die semantische Ähnlichkeit benachbarter Sätze am stärksten ändert
+\end{itemize}
+
+\subsection{Embedding-Modelle}
+
+Das Embedding-Modell überführt jeden Chunk in einen Vektor und bildet damit die Grundlage der semantischen Suche.
+
+\begin{itemize}
+    \item \textbf{OpenAI (API-basiert)}: \texttt{text-embedding-3-small} (Produktiv-Default), \texttt{text-embedding-3-large}, \texttt{text-embedding-ada-002}
+    \item \textbf{Lokale HuggingFace-/\texttt{sentence-transformers}-Modelle}: \texttt{multilingual-e5-large}, \texttt{bge-m3}, \texttt{paraphrase-multilingual-mpnet}, \texttt{minilm-l6-en} -- laufen lokal, ohne API-Kosten
+\end{itemize}
+
+\subsection{Retrieval-Strategien}
+
+Die Retrieval-Strategie bestimmt, welche Chunks zur Anfragezeit aus dem Vectorstore ausgewählt werden.
+
+\begin{itemize}
+    \item \textbf{MMR (Produktiv-Default)}: Max Marginal Relevance, wählt aus einem größeren Kandidatenpool eine thematisch diverse Teilmenge
+    \item \textbf{Similarity}: reine Nächste-Nachbarn-Suche über Kosinus-Ähnlichkeit, ohne Diversitätsmechanismus
+    \item \textbf{Cross-Encoder-Rerank}: sortiert die von der initialen Suche gelieferten Kandidaten mit einem Cross-Encoder-Modell neu
+    \item \textbf{BM25-Hybrid}: kombiniert klassische BM25-Stichwortsuche mit dichter Vektorsuche über Reciprocal Rank Fusion
+\end{itemize}
+
+\subsection{Antwort-LLMs}
+
+Das Antwort-LLM generiert aus Frage und abgerufenem Kontext die finale Antwort.
+
+\begin{itemize}
+    \item \textbf{OpenAI \texttt{gpt-4o-mini} (Produktiv-Default)}
+    \item \textbf{Mistral \texttt{mistral-small-latest}}
+    \item \textbf{OpenAI \texttt{gpt-4o}}: volle Modellgröße derselben Generation wie der Produktiv-Default, läuft über denselben Hub/Key wie \texttt{gpt-4o-mini}
+\end{itemize}
+
+% =====================================================================
+\section{Validierung: Quantitative Evaluation mit RAGAS}
+\label{sec:validierung}
+% =====================================================================
+
+\subsection{Warum RAGAS, mit festem, unabhängigem Richter}
+
+Für diese Arbeit wird daher RAGAS
+eingesetzt, ein etabliertes Open-Source-Framework zur automatisierten,
+metrikbasierten Evaluation von RAG-Systemen. RAGAS benötigt für jede
+Frage vier Bestandteile: die Nutzerfrage selbst, die vom System generierte
+Antwort und die dafür abgerufenen Kontext-Chunks -- für drei der fünf in
+Abschnitt~\ref{sec:validierung} verwendeten Metriken zusätzlich eine
+manuell verfasste Referenzantwort ("Ground Truth"), gegen die Antwort und
+Kontext inhaltlich abgeglichen werden.
+
+\subsection{Die fünf RAGAS-Metriken}
+\begin{itemize}
+    \item \textbf{Faithfulness} -- "Ist die Antwort durch den Kontext gedeckt?"
+    \begin{itemize}
+        \item Braucht keine Referenz; zerlegt Antwort in atomare Claims, prüft jeden per NLI gegen den Kontext
+        \item Niedriger Wert = Modell halluziniert
+    \end{itemize}
+    \item \textbf{AnswerRelevancy} -- "Beantwortet die Antwort die gestellte Frage?"
+    \begin{itemize}
+        \item Braucht keine Referenz; generiert Rückwärts-Fragen aus der Antwort, vergleicht Embedding-Ähnlichkeit zur Originalfrage
+        \item Niedriger Wert = Antwort ausweichend/zu allgemein
+    \end{itemize}
+    \item \textbf{ContextPrecision} -- "Sind die abgerufenen Chunks relevant?"
+    \begin{itemize}
+        \item Braucht Referenzantwort; rangbasierte Average Precision über die Relevanz jedes abgerufenen Chunks
+        \item Niedriger Wert = Retrieval liefert Rauschen
+    \end{itemize}
+    \item \textbf{ContextRecall} -- "Deckt der Kontext alles ab, was nötig wäre?"
+    \begin{itemize}
+        \item Braucht Referenzantwort; prüft, ob jede Aussage der Referenzantwort im Kontext belegbar ist
+        \item Niedriger Wert = Retrieval verpasst wichtige Information
+        \item Misst ausschließlich Retrieval-Qualität, nicht das antwortende LLM -- deshalb über verschiedene LLMs bei sonst gleicher Pipeline identisch (internes Konsistenz-Signal)
+    \end{itemize}
+    \item \textbf{FactualCorrectness} -- "Wie viele Fakten stimmen mit der Referenz überein?"
+    \begin{itemize}
+        \item Braucht Referenzantwort; F1-Score über atomare Fakten (generierte Antwort vs.\ Referenz)
+        \item Durchgängig niedrigste Metrik (typisch 0,4--0,7) -- normal bei striktem Fakten-F1 gegen manuell formulierte Referenzen, nicht direkt mit den anderen vier Metriken vergleichbar
+    \end{itemize}
+    \item Alle Werte in $[0,1]$, höher ist besser; der in dieser Abgabe verwendete $\varnothing$-Score ist das ungewichtete Mittel aller fünf Metriken je Kombination (grobe Ranking-Kennzahl, für Detailanalysen sind Einzelmetriken aussagekräftiger)
+\end{itemize}
+
+\subsection{Evaluations-Setup}
+\begin{itemize}
+    \item Fester 12-Fragen-Datensatz mit Referenzantworten (\texttt{eval/dataset.py}), deckt alle vier Handbuch-Themenbereiche ab
+    \item Gleicher Demo-Korpus und gleiches Fragenset über alle sechs Studien -- Vergleichbarkeit zwischen den Studien
+    \item Die vier Pipeline-Stufen-Vergleiche (Parser, Chunking, Embedding, Retrieval) laufen mit fest auf \texttt{gpt-4o-mini} fixiertem Antwort-LLM und werden auch von \texttt{gpt-4o-mini} als Richter bewertet -- da das Antwort-LLM dort für alle verglichenen Varianten konstant bleibt, ist ein Self-Preference-Bias ausgeschlossen; ergänzend wurden die Ergebnisse für Retrieval und Embedding stichprobenartig gegen ein zweites, größeres Richtermodell (Mistral Large) validiert, ohne wesentliche Abweichungen zum primären Richter
+    \item Der Antwort-LLM-Vergleich selbst (GPT-4o-mini, Mistral, GPT-4o) sowie das Best-of-Breed-Experiment testen gezielt mehrere Antwort-LLMs gegeneinander; da hier Modelle unterschiedlicher Anbieter direkt gegeneinander antreten, wird als Richter ein von allen Kandidaten unabhängiges Modell eingesetzt (Claude Sonnet 5, Anthropic)
+    \item Gesamtumfang: 30 Kombinationen $\times$ 12 Fragen $\times$ 5 Metriken $=$ 1.800 Einzel-Scores
+    \item Reproduzierbar über \texttt{scripts/evaluate\_*\_ragas.py}
+\end{itemize}
+
+\subsection{Bewertung der einzelnen Komponenten}
+
+Mit der in den vorigen Abschnitten beschriebenen Methodik wurde jede der
+fünf in Kapitel~\ref{sec:vergleiche} vorgestellten Dimensionen einzeln
+ausgewertet -- jeweils mit allen übrigen Komponenten auf dem
+Produktiv-Default fixiert. Die vollständigen Ergebnistabellen, Diagramme
+und Rohdaten je Dimension sind nicht an dieser
+Stelle ausgeführt, sondern im interaktiven Dashboard
+\texttt{docs/dashboard.html} zusammengefasst. Ergänzend liegt zu jeder Dimension eine
+eigene Dokumentationsdatei mit ausführlicher Diskussion vor:
+\texttt{docs/PARSER.md}, \texttt{docs/CHUNKING.md},
+\texttt{docs/EMBEDDING.md}, \texttt{docs/RETRIEVAL.md} und
+\texttt{docs/LLM.md}. Im direkten Antwort-LLM-Vergleich unter dem unabhängigen Richter liegen GPT-4o-mini ($\varnothing$ 0,741) und GPT-4o ($\varnothing$ 0,739) praktisch gleichauf, mit Mistral ($\varnothing$ 0,662) deutlich dahinter. Abschließend wurde ein Best-of-Breed-Experiment durchgeführt, das die vier Einzelsieger kombiniert und prüft, ob sich deren Einzelverbesserungen tatsächlich addieren.
+
+\subsection{Best-of-Breed-Experiment}
+\label{sec:best-of-breed}
+
+Das abschließende sechste Experiment kombiniert die vier Einzelsieger der
+vorigen Vergleiche zum Zeitpunkt ihrer Ermittlung (Unstructured + Semantic
+Chunking + \texttt{text-embedding-3-large} + Rerank) zu einer
+Gesamt-Pipeline und testet sie auf dem Demo-Korpus über die drei
+Antwort-LLMs (GPT-4o-mini, Mistral, GPT-4o) gegen die Produktiv-Baseline,
+bewertet durch den in Abschnitt~\ref{sec:validierung} beschriebenen
+unabhängigen Richter. Im Durchschnitt über alle drei Antwort-LLMs und
+fünf Metriken schlägt Best-of-Breed die Baseline deutlich ($\varnothing$
+0,819 vs.\ 0,716, $+$14,4\,\%). Der Vorsprung gilt jedoch nicht für jede
+Einzelmetrik und jedes Antwort-LLM gleichermaßen: Mit GPT-4o gewinnt
+Best-of-Breed alle fünf Metriken; mit Mistral sinkt die Faithfulness
+gegenüber der Baseline (0,799 auf 0,746); mit GPT-4o-mini sinken sowohl
+Faithfulness (0,906 auf 0,896) als auch FactualCorrectness (0,508 auf
+0,479). Innerhalb von Best-of-Breed ist GPT-4o zugleich das mit Abstand
+stärkste Antwort-LLM ($\varnothing$ 0,863, vor GPT-4o-mini mit 0,821 und
+Mistral mit 0,772). Die methodische Kernaussage: Einzelverbesserungen
+addieren sich nicht automatisch zu einer gleichmäßigen Verbesserung --
+jede Kombination muss selbst gemessen werden. Details in
+\texttt{docs/dashboard.html}, Tab "Best-of-Breed".
+
+% =====================================================================
+\section{Bekannte Grenzen, Ausblick und Fazit}
+\label{sec:grenzen}
+% =====================================================================
+
+\subsection{Bekannte Grenzen und Ausblick}
+
+\begin{itemize}
+    \item Inkrementelles Ingestion-Update: Ein gezielter Fix ergänzt einen Datei-Fingerabdruck (SHA-256 je PDF, gespeichert in einem Manifest neben der Collection); seitdem verarbeitet jeder Ingestion-Lauf nur noch neue oder inhaltlich geänderte PDFs neu, entfernt gelöschte Dateien aus der Collection und überspringt unveränderte Dateien vollständig -- ein Lauf ohne Änderungen ist damit ein reiner No-op ohne API-Kosten
+    \item Seitenbasiertes Header-Splitting: Ein gezielter Fix führt Abschnitte, die ohne neue Überschrift über eine Seitengrenze laufen, inzwischen mit dem vorigen Abschnitt zusammen (die Seitenangabe wird dann zu einem Bereich); der PDF-Deep-Link zeigt bei solchen zusammengeführten Chunks aber weiterhin nur auf die Startseite, nicht auf eine ggf.\ relevantere Folgeseite
+    \item Speicherumfang bewusst begrenzt: aktuell 4 von 21 verfügbaren Abaqus-2017-Handbüchern eingelesen ($\sim$5.100 von $\sim$21.800 Seiten), um Ingestion-Dauer und Kosten für Entwicklung/Tests gering zu halten
+    \item Vergleichsumfang der vier Einzeldimensionen auf den Demo-Korpus beschränkt: Die Parser-, Chunking-, Embedding- und Retrieval-Vergleiche laufen ausschließlich auf dem $\sim$53-Seiten-Demo-Korpus, nicht auf dem vollen Produktivkorpus -- wegen der Laufzeit von Unstructured (\texttt{hi\_res}) und Semantic Chunking auf $\sim$5.100 Seiten wurde eine Ausweitung im Rahmen dieser Abgabe bewusst nicht mehr durchgeführt. Das gilt auch für das Best-of-Breed-Experiment selbst, dessen Ergebnisse (Abschnitt~\ref{sec:best-of-breed}) sich ebenfalls auf den Demo-Korpus beziehen
+\end{itemize}
+
+\subsection{Fazit}
+\label{sec:fazit}
+
+Das im Rahmen dieser Arbeit entwickelte System zeigt, dass sich die
+mehrere tausend Seiten umfassenden Abaqus-Handbücher erfolgreich zu einem
+konversationsfähigen Chatbot verarbeiten lassen. Der Bot beantwortet
+Bedienungsfragen ausschließlich auf Basis der Handbuchinhalte, macht jede
+Antwort über eine seitengenaue Quellenangabe im Original nachprüfbar und
+versteht dank eines einfachen Gesprächsgedächtnisses auch Folgefragen.
+
+Über die reine Funktionsfähigkeit hinaus war ein zentrales Ziel der
+Arbeit, die Designentscheidungen der Pipeline nicht nur zu begründen,
+sondern auch empirisch zu überprüfen. Dazu wurde jede der fünf
+austauschbaren Pipeline-Stufen -- Parser, Chunking, Embedding, Retrieval
+und Antwort-LLM -- über eine eigene Registry konsequent austauschbar
+gestaltet und in sechs unabhängigen RAGAS-Studien mit insgesamt 1.800
+Einzel-Scores gegen Alternativen getestet. Damit liegen für alle fünf
+Dimensionen belastbare Tendenzaussagen vor, statt sich allein auf
+Intuition oder Einzelbeispiele zu verlassen.
+
+Eine methodische Erkenntnis liefert dabei das abschließende
+Best-of-Breed-Experiment: Die Kombination der vier jeweils besten
+Einzelkomponenten schlägt die Produktiv-Baseline im Durchschnitt über alle
+drei getesteten Antwort-LLMs und alle fünf Metriken deutlich
+($+$14,4\,\%), jedoch nicht bei jeder Einzelmetrik gleichermaßen -- mit
+Mistral und, geringfügig, auch mit GPT-4o-mini als Antwort-LLM sinkt die
+Faithfulness gegenüber der Baseline leicht. Einzelverbesserungen addieren
+sich also nicht automatisch zu einer gleichmäßigen Verbesserung, und selbst
+ein neuer Gesamtsieger ersetzt nicht die Notwendigkeit, jede Kombination
+einzeln zu messen. Für den praktischen Einsatz leitet sich daraus die
+pragmatischste Empfehlung ab: mindestens Cross-Encoder-Reranking statt MMR
+einsetzen -- der größte Einzelgewinn bei geringstem Umbauaufwand.
+Innerhalb der Best-of-Breed-Pipeline erweist sich GPT-4o zudem als das mit
+Abstand stärkste Antwort-LLM ($\varnothing$ 0,863 gegenüber 0,821 für
+GPT-4o-mini und 0,772 für Mistral); die Produktiv-App bietet Best-of-Breed
+dementsprechend nur auf dem vollen Produktivkorpus und standardmäßig mit
+GPT-4o als Antwort-LLM an, trotz dessen höherer Kosten pro Token gegenüber
+dem Produktiv-Default \texttt{gpt-4o-mini}.
+
+Die in Abschnitt~\ref{sec:grenzen} genannte Grenze des auf den Demo-Korpus
+beschränkten Vergleichsumfangs -- die auch für das Best-of-Breed-Experiment
+selbst gilt -- schränkt die Übertragbarkeit der genauen Effektgrößen auf
+den vollen Produktivkorpus ein; eine Validierung des Best-of-Breed-Experiments
+auf dem vollen Korpus ist bewusst nicht Teil dieser Arbeit. Insgesamt zeigt die
+Arbeit, dass ein systematischer, austauschbarer Pipeline-Aufbau in
+Kombination mit einer konsistenten RAGAS-Evaluation es erlaubt,
+RAG-Designentscheidungen empirisch statt nur intuitiv zu treffen.
+
+\subsection{Hinweis zum Einsatz von KI-Werkzeugen}
+
+Bei der Erstellung der vorliegenden Arbeit wurde KI-Unterstützung eingesetzt.
+
+\end{document}

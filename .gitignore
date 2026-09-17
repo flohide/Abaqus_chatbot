@@ -20,3 +20,16 @@ eval_results/
 .ragas_cache/
 .ragas_cache_*/
 .claude/settings.local.json
+# Interne Arbeitsnotizen (Audit-Protokoll bzw. To-do-Liste), nicht fuer die
+# Abgabe/das oeffentliche Repo gedacht.
+inconsistent.md
+docs/OFFENE_PUNKTE.md
+# LaTeX-Build-Artefakte (latex/main.tex und main.pdf selbst bleiben
+# versioniert, der Rest entsteht bei jedem latexmk-Lauf neu).
+latex/*.aux
+latex/*.fdb_latexmk
+latex/*.fls
+latex/*.log
+latex/*.out
+latex/*.synctex.gz
+latex/*.toc

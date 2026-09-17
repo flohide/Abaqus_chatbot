@@ -15,9 +15,10 @@ eine Factory `(vectorstore) -> Callable[[str], list[Document]]`.
   `*STEP`), die Embeddings manchmal schlechter abbilden als Volltextsuche.
 
 `rank_bm25` (für `hybrid`) und `sentence-transformers` (für `rerank`) sind
-optionale, lazy importierte Abhängigkeiten (siehe
-requirements-retrieval-comparison.txt) - das Modul bleibt ohne sie
-importierbar, solange nur `mmr`/`similarity` genutzt werden.
+lazy importierte Abhängigkeiten (Teil von requirements.txt, da `rerank` von
+der Best-of-Breed-Pipeline in app.py zur Query-Zeit gebraucht wird) - das
+Modul bleibt ohne sie importierbar, solange nur `mmr`/`similarity` genutzt
+werden.
 """
 
 import re

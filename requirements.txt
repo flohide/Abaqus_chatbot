@@ -20,6 +20,15 @@ rich>=13.7.0
 # Web-Frontend
 streamlit>=1.38.0
 
+# Retrieval: rank_bm25 für "hybrid" (reines Python, keine Downloads),
+# sentence-transformers für den Cross-Encoder in "rerank" (lädt beim ersten
+# Aufruf ein Modell vom HuggingFace Hub, siehe docs/RETRIEVAL.md). Beide
+# gehören hierher statt in eine separate Comparison-Datei, weil "rerank" von
+# der Best-of-Breed-Pipeline in app.py zur Query-Zeit gebraucht wird - also
+# zum normalen Betrieb der App, nicht nur zum Retrieval-Vergleich.
+rank_bm25>=0.2.2
+sentence-transformers>=3.0.0
+
 # Tests
 pytest>=8.0.0
 

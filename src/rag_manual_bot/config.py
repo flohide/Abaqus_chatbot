@@ -22,14 +22,26 @@ class Settings(BaseSettings):
     embedding_model: str = Field("text-embedding-3-small", alias="EMBEDDING_MODEL")
     llm_temperature: float = Field(0.0, alias="LLM_TEMPERATURE")
 
-    # Mistral (für den LLM-Vergleich im Frontend; optional, nur nötig wenn
-    # im Frontend "Mistral" als Modell ausgewählt wird)
+    # Mistral (für den Antwort-LLM-Vergleich in eval/run.py, siehe docs/LLM.md;
+    # optional, nur nötig wenn Mistral dort als Antwort-LLM getestet wird -
+    # im Streamlit-Frontend app.py ist das LLM pro Pipeline fest vorgegeben
+    # und nicht frei wählbar)
     mistral_api_key: str | None = Field(None, alias="MISTRAL_API_KEY")
     mistral_model: str = Field("mistral-small-latest", alias="MISTRAL_MODEL")
 
-    # Qwen (offenes Gewichts-Modell, läuft über denselben Hub/Key wie OpenAI,
-    # siehe docs/LLM.md) - kein eigener API-Key nötig
-    qwen_model: str = Field("Qwen2.5-32B-Instruct-AWQ", alias="QWEN_MODEL")
+    # GPT-4o (volles Modell, läuft über denselben Hub/Key wie "openai" -
+    # zusätzliche Antwort-LLM-Variante im LLM-Vergleich, siehe docs/LLM.md:
+    # gleiche Modellgeneration wie der Produktiv-Default gpt-4o-mini, nur
+    # größer - isoliert die Modellgröße als einzige Variable)
+    gpt4o_model: str = Field("gpt-4o", alias="GPT4O_MODEL")
+
+    # Anthropic Claude - RAGAS-Richter fuer den LLM-Vergleich und
+    # Best-of-Breed (siehe eval/metrics.py). Gehört bewusst zu keiner der
+    # bewerteten Antwort-LLM-Familien (OpenAI/Mistral) - vermeidet den
+    # Self-Preference-Bias eines gleichzeitig als Kandidat und Richter
+    # eingesetzten Modells.
+    anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
+    judge_model: str = Field("claude-sonnet-5", alias="JUDGE_MODEL")
 
     # Pfade
     raw_pdf_dir: Path = PROJECT_ROOT / "data" / "raw_pdfs"
@@ -58,6 +70,12 @@ class Settings(BaseSettings):
     # Retrieval
     retrieval_k: int = Field(5, alias="RETRIEVAL_K")
     retrieval_fetch_k: int = Field(20, alias="RETRIEVAL_FETCH_K")
+
+    # Netzwerk-Robustheit fuer alle OpenAI-/Mistral-API-Clients (LLMs,
+    # Embeddings) - zentral statt als Magic Numbers an mehreren Stellen
+    # dupliziert.
+    api_request_timeout: int = Field(60, alias="API_REQUEST_TIMEOUT")
+    api_max_retries: int = Field(2, alias="API_MAX_RETRIES")
 
 
 settings = Settings()

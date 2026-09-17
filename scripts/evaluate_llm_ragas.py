@@ -7,12 +7,11 @@ FactualCorrectness auf der Produktiv-äquivalenten Chunking-Demo-Collection
 text-embedding-3-small, Retrieval fix: MMR, identisches 12-Fragen-Set wie
 bei den anderen Vergleichen) - variiert wird ausschließlich, welches LLM
 die Antwort generiert: OpenAI (`gpt-4o-mini`), Mistral
-(`mistral-small-latest`) und Qwen (`Qwen2.5-32B-Instruct-AWQ`, offenes
-Gewichts-Modell über denselben Hub/Key wie OpenAI, kein separater API-Key
-nötig).
+(`mistral-small-latest`) und GPT-4o (volle Modellgröße, läuft über denselben
+Hub/Key wie OpenAI).
 
-Richter-LLM ist für alle Kombinationen fest OpenAI (siehe eval/metrics.py)
-- unabhängig vom jeweils getesteten Antwort-LLM.
+Richter-LLM ist für alle Kombinationen ein unabhängiges Modell (Claude, siehe
+eval/metrics.py) - unabhängig vom jeweils getesteten Antwort-LLM.
 
 Voraussetzung: die Chunking-Demo-Collection `chunking_demo_header_recursive_800`
 muss bereits existieren (python scripts/build_chunking_demo_corpus.py
@@ -20,7 +19,7 @@ header_recursive_800) und MISTRAL_API_KEY muss in .env gesetzt sein.
 
 Nutzung:
     python scripts/evaluate_llm_ragas.py                          # alle 3 LLMs
-    python scripts/evaluate_llm_ragas.py --llms openai qwen
+    python scripts/evaluate_llm_ragas.py --llms openai gpt4o
     python scripts/evaluate_llm_ragas.py --concurrency 2
 """
 

@@ -15,13 +15,13 @@ from rag_manual_bot.config import settings
 from rag_manual_bot.rag.llms import SUPPORTED_PROVIDERS, get_llm
 
 
-def test_supported_providers_includes_qwen():
-    assert SUPPORTED_PROVIDERS == ("openai", "mistral", "qwen")
+def test_supported_providers():
+    assert SUPPORTED_PROVIDERS == ("openai", "mistral", "gpt4o")
 
 
-def test_qwen_uses_same_hub_and_key_as_openai():
-    llm = get_llm("qwen")
-    assert llm.model_name == settings.qwen_model
+def test_gpt4o_uses_same_hub_and_key_as_openai():
+    llm = get_llm("gpt4o")
+    assert llm.model_name == settings.gpt4o_model
     assert llm.openai_api_base == settings.openai_base_url
 
 

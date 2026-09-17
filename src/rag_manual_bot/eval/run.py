@@ -12,7 +12,10 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+import httpx
 from langchain_core.embeddings import Embeddings
+from openai import APIConnectionError as OpenAIAPIConnectionError
+from openai import APIStatusError as OpenAIAPIStatusError
 
 from . import _ragas_compat  # noqa: F401  (muss vor jedem ragas-Import laufen)
 from .dataset import EVAL_QUESTIONS
@@ -37,14 +40,47 @@ EMBEDDING_COLLECTIONS = {name: f"embedding_demo_{name}" for name in EMBEDDING_BA
 # Produktiv-äquivalenten Chunking-Demo-Collection (PyMuPDF4LLM +
 # Header+Recursive 800 + text-embedding-3-small).
 RETRIEVAL_BASE_COLLECTION = "chunking_demo_header_recursive_800"
-LLM_PROVIDERS = ["openai", "mistral"]
+LLM_PROVIDERS = ["openai"]
 # Antwort-LLM-Vergleich (siehe docs/LLM.md) braucht wie der Retrieval-Vergleich
 # keinen eigenen Demo-Korpus - läuft ebenfalls auf RETRIEVAL_BASE_COLLECTION,
 # mit MMR (Produktiv-Default) und variiert nur, welches LLM antwortet. Eigene
 # Liste statt LLM_PROVIDERS zu erweitern, damit die bestehenden vier
-# Vergleiche (die LLM_PROVIDERS als zweite Achse nutzen) unverändert bei 2
-# LLMs bleiben, statt bei jedem Lauf zusätzlich Qwen mitzutesten.
-ANSWER_LLM_PROVIDERS = ["openai", "mistral", "qwen"]
+# Vergleiche (die LLM_PROVIDERS als zweite Achse nutzen) unabhängig davon
+# bleiben, welche/wie viele LLMs im eigentlichen LLM-Vergleich getestet werden.
+ANSWER_LLM_PROVIDERS = ["openai", "mistral", "gpt4o"]
+
+
+_TRANSIENT_HTTP_STATUS = {408, 429, 500, 502, 503, 504}
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    """Nur echte, voruebergehende API-Fehler (Rate-Limits, Server-/
+    Verbindungsfehler) gelten als retry-wuerdig - ein dauerhafter Fehler
+    (abgelaufener API-Key, kaputter Prompt) soll sofort durchschlagen statt
+    erst nach ~50s Backoff."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _TRANSIENT_HTTP_STATUS
+    if isinstance(exc, OpenAIAPIConnectionError):
+        return True
+    if isinstance(exc, OpenAIAPIStatusError):
+        return exc.status_code in _TRANSIENT_HTTP_STATUS
+    return False
+
+
+def _invoke_with_retry(chain, inputs: dict, max_attempts: int = 5, base_delay: float = 5.0):
+    """`chain.invoke()` mit Retry+Backoff gegen transiente API-Fehler (v. a.
+    429 Rate-Limit bei Mistral -
+    `langchain_mistralai`s eigener Retry deckt HTTPStatusError/429 nicht ab,
+    ein einzelner 429 hat den kompletten Eval-Lauf bisher sofort abgebrochen).
+    Dauerhafte Fehler (siehe `_is_transient_error`) werden sofort durchgereicht."""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return chain.invoke(inputs)
+        except Exception as exc:
+            if attempt == max_attempts or not _is_transient_error(exc):
+                raise
+            time.sleep(base_delay * attempt)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def _generate_answers(
@@ -68,7 +104,7 @@ def _generate_answers(
 
     records = []
     for eq in EVAL_QUESTIONS:
-        result = chain.invoke({"question": eq.question, "chat_history": []})
+        result = _invoke_with_retry(chain, {"question": eq.question, "chat_history": []})
         records.append(
             {
                 **extra_fields,
@@ -108,7 +144,7 @@ def run_full_evaluation(
     llm_providers = llm_providers or LLM_PROVIDERS
     log = on_progress or (lambda msg: None)
 
-    metrics = build_judge_metrics()
+    metrics = build_judge_metrics(provider="openai")
 
     all_records: list[dict] = []
     for parser in parsers:
@@ -146,7 +182,7 @@ def run_embedding_evaluation(
     llm_providers = llm_providers or LLM_PROVIDERS
     log = on_progress or (lambda msg: None)
 
-    metrics = build_judge_metrics()
+    metrics = build_judge_metrics(provider="openai")
 
     all_records: list[dict] = []
     for model_name in models:
@@ -186,7 +222,7 @@ def run_retrieval_evaluation(
     llm_providers = llm_providers or LLM_PROVIDERS
     log = on_progress or (lambda msg: None)
 
-    metrics = build_judge_metrics()
+    metrics = build_judge_metrics(provider="openai")
 
     all_records: list[dict] = []
     for strategy in strategies:
@@ -214,10 +250,14 @@ def run_retrieval_evaluation(
 BEST_OF_BREED_COLLECTION = "best_of_breed"
 
 
+FULL_BEST_OF_BREED_COLLECTION = "full_custom_unstructured_semantic_text-embedding-3-large"
+
+
 def run_best_of_breed_evaluation(
     llm_providers: list[str] | None = None,
     concurrency: int = 4,
     on_progress: Callable[[str], None] | None = None,
+    corpus: str = "demo",
 ) -> list[dict]:
     """Vergleicht die "Best-of-Breed"-Pipeline (Unstructured + Semantic +
     text-embedding-3-large + Rerank - je der empirisch beste Kandidat aus den
@@ -226,20 +266,37 @@ def run_best_of_breed_evaluation(
     800 + text-embedding-3-small + MMR). Records tragen `"pipeline"` ∈
     {"best_of_breed", "baseline"}. Beide Pipelines laufen im selben Lauf mit
     demselben Richter, damit der Vergleich sauber ist. Default-LLMs sind alle
-    drei Antwort-LLMs (siehe docs/LLM.md) - Qwen gewann dort das
-    Gesamtranking, ist also auch hier relevant."""
+    drei Antwort-LLMs (siehe docs/LLM.md).
+
+    `corpus="full"` nutzt die vollen ~5.100-Seiten-Collections
+    (`FULL_BEST_OF_BREED_COLLECTION` unter `settings.full_custom_vectorstore_dir`,
+    Produktiv-Collection unter `settings.vectorstore_dir`) statt der
+    ~53-Seiten-Demo-Collections. Beide Collections müssen für `corpus="full"`
+    bereits existieren (siehe
+    `ingestion/custom_demo.py::resolve_collection()`), diese Funktion baut sie
+    nicht selbst."""
     llm_providers = llm_providers or ANSWER_LLM_PROVIDERS
     log = on_progress or (lambda msg: None)
 
-    metrics = build_judge_metrics()
+    if corpus == "full":
+        bob_dir, bob_collection = settings.full_custom_vectorstore_dir, FULL_BEST_OF_BREED_COLLECTION
+        baseline_dir, baseline_collection = settings.vectorstore_dir, settings.collection_name
+    else:
+        bob_dir, bob_collection = settings.embedding_demo_vectorstore_dir, BEST_OF_BREED_COLLECTION
+        baseline_dir, baseline_collection = settings.chunking_demo_vectorstore_dir, RETRIEVAL_BASE_COLLECTION
+
+    # Unabhaengiger Claude-Richter: hier treten OpenAI-Modelle direkt gegen
+    # Mistral an, ein Richter aus der OpenAI-Familie waere Kandidat und
+    # Richter zugleich (siehe eval/metrics.py).
+    metrics = build_judge_metrics(provider="anthropic")
 
     all_records: list[dict] = []
     for llm_provider in llm_providers:
         t0 = time.time()
         log(f"Generiere Antworten: pipeline=best_of_breed, llm={llm_provider} ...")
         records = _generate_answers(
-            settings.embedding_demo_vectorstore_dir,
-            BEST_OF_BREED_COLLECTION,
+            bob_dir,
+            bob_collection,
             llm_provider,
             extra_fields={"pipeline": "best_of_breed"},
             embeddings=EMBEDDING_BACKENDS["text-embedding-3-large"](),
@@ -251,8 +308,8 @@ def run_best_of_breed_evaluation(
         t0 = time.time()
         log(f"Generiere Antworten: pipeline=baseline, llm={llm_provider} ...")
         baseline_records = _generate_answers(
-            settings.chunking_demo_vectorstore_dir,
-            RETRIEVAL_BASE_COLLECTION,
+            baseline_dir,
+            baseline_collection,
             llm_provider,
             extra_fields={"pipeline": "baseline"},
             retrieval_strategy="mmr",
@@ -281,7 +338,10 @@ def run_llm_evaluation(
     llm_providers = llm_providers or ANSWER_LLM_PROVIDERS
     log = on_progress or (lambda msg: None)
 
-    metrics = build_judge_metrics()
+    # Unabhaengiger Claude-Richter: das ist der eigentliche LLM-Vergleich
+    # (OpenAI vs. Mistral vs. GPT-4o), ein Richter aus der OpenAI-Familie
+    # waere hier Kandidat und Richter zugleich (siehe eval/metrics.py).
+    metrics = build_judge_metrics(provider="anthropic")
 
     all_records: list[dict] = []
     for llm_provider in llm_providers:
@@ -318,7 +378,7 @@ def run_chunking_evaluation(
     llm_providers = llm_providers or LLM_PROVIDERS
     log = on_progress or (lambda msg: None)
 
-    metrics = build_judge_metrics()
+    metrics = build_judge_metrics(provider="openai")
 
     all_records: list[dict] = []
     for chunker_name in chunkers:

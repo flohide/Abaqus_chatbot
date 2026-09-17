@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-"""Streamlit-Frontend: klassische Chat-Oberfläche mit unabhängiger Auswahl von
-Parser, Chunking, Embedding, Retrieval-Strategie und Antwort-LLM.
+"""Streamlit-Frontend: klassische Chat-Oberfläche mit Auswahl zwischen der
+Produktiv-Pipeline und der Best-of-Breed-Pipeline (siehe docs/BEST_OF_BREED.md).
+Das Antwort-LLM ist je Pipeline fest vorgegeben, nicht separat wählbar.
 
 Nutzung:
     streamlit run app.py
@@ -8,97 +9,74 @@ Nutzung:
 
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 import streamlit as st  # noqa: E402
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage  # noqa: E402
 
-from rag_manual_bot.citations import source_pdf_link  # noqa: E402
 from rag_manual_bot.config import settings  # noqa: E402
-from rag_manual_bot.ingestion.chunking_backends import CHUNKING_BACKENDS  # noqa: E402
-from rag_manual_bot.ingestion.custom_demo import (  # noqa: E402
-    DEFAULT_CHUNKING,
-    DEFAULT_EMBEDDING,
-    DEFAULT_PARSER,
-    estimate_build_seconds,
-    is_known_combination,
-    is_parser_cached,
-    resolve_collection,
-)
-from rag_manual_bot.ingestion.embedding_models import EMBEDDING_BACKENDS  # noqa: E402
-from rag_manual_bot.ingestion.parser_backends import PARSER_BACKENDS  # noqa: E402
+from rag_manual_bot.ingestion.custom_demo import resolve_collection  # noqa: E402
 from rag_manual_bot.rag.chain import build_rag_chain  # noqa: E402
-from rag_manual_bot.rag.llms import mistral_available  # noqa: E402
-from rag_manual_bot.rag.retrieval_backends import RETRIEVAL_BACKENDS  # noqa: E402
 from rag_manual_bot.rag.vectorstore import load_vectorstore  # noqa: E402
 
-PARSER_LABELS = {
-    "pymupdf4llm": "PyMuPDF4LLM (Produktiv)",
-    "pdfplumber": "pdfplumber",
-    "docling": "Docling (sehr langsam, siehe docs/PARSER.md)",
-    "unstructured": "Unstructured (langsam, siehe docs/PARSER.md)",
+# Die wählbaren Gesamt-Pipelines (siehe docs/BEST_OF_BREED.md) - jede legt
+# Parser, Chunking, Embedding, Retrieval-Strategie UND Antwort-LLM fest.
+# Best-of-Breed wird nur noch auf dem vollen ~5.100-Seiten-Produktivkorpus
+# angeboten - die RAGAS-Validierung (docs/BEST_OF_BREED.md) läuft weiterhin
+# auf dem 53-Seiten-Demo-Korpus, eine offizielle Vollkorpus-RAGAS-Auswertung
+# ist bewusst nicht Teil dieser Arbeit; die
+# anfängliche ~53-Seiten-Demo-Korpus-Chat-Variante
+# (scripts/build_best_of_breed_demo.py) war nur ein Zwischenschritt zur
+# Pipeline-Auswahl und ist hier entfernt.
+# GPT-4o ist bei Best-of-Breed fest hinterlegt, weil es dort das mit Abstand
+# staerkste Antwort-LLM ist (⌀ 0.863 vs. gpt-4o-mini 0.821 vs. Mistral 0.772,
+# RAGAS/Claude-Richter, eval_results/best_of_breed_raw_20260915_094906.csv)
+# - anders als auf der Produktiv-Pipeline, wo gpt-4o-mini knapp vorne liegt
+# (siehe docs/LLM.md).
+PIPELINES = {
+    "Produktiv (voller Korpus, ~5.100 Seiten)": {
+        "corpus": "full",
+        "parser": "pymupdf4llm",
+        "chunking": "header_recursive_800",
+        "embedding": "text-embedding-3-small",
+        "retrieval": "mmr",
+        "llm": "openai",
+        "components": [
+            ("Parser", "PyMuPDF4LLM"),
+            ("Chunking", "Header+Recursive 800"),
+            ("Embedding", "text-embedding-3-small"),
+            ("Retrieval", "MMR"),
+            ("LLM", settings.llm_model),
+        ],
+    },
+    "Best-of-Breed (voller Korpus, ~5.100 Seiten)": {
+        "corpus": "full",
+        "parser": "unstructured",
+        "chunking": "semantic",
+        "embedding": "text-embedding-3-large",
+        "retrieval": "rerank",
+        "llm": "gpt4o",
+        "components": [
+            ("Parser", "Unstructured"),
+            ("Chunking", "Semantic"),
+            ("Embedding", "text-embedding-3-large"),
+            ("Retrieval", "Rerank (Cross-Encoder)"),
+            ("LLM", settings.gpt4o_model),
+        ],
+    },
 }
-CHUNKING_LABELS = {
-    "header_recursive_400": "Header+Recursive 400",
-    "header_recursive_800": "Header+Recursive 800 (Produktiv)",
-    "header_recursive_1600": "Header+Recursive 1600",
-    "recursive_only": "Recursive-only",
-    "token_based": "Token-basiert",
-    "semantic": "Semantic (langsam, siehe docs/CHUNKING.md)",
-}
-EMBEDDING_LABELS = {
-    "text-embedding-3-small": "text-embedding-3-small (Produktiv)",
-    "text-embedding-3-large": "text-embedding-3-large",
-    "text-embedding-ada-002": "text-embedding-ada-002",
-    "multilingual-e5-large": "multilingual-e5-large (lokal/HF)",
-    "bge-m3": "bge-m3 (lokal/HF)",
-    "paraphrase-multilingual-mpnet": "paraphrase-multilingual-mpnet (lokal/HF)",
-    "minilm-l6-en": "minilm-l6-en (lokal/HF)",
-}
-
-PARSER_OPTIONS = {PARSER_LABELS[k]: k for k in PARSER_BACKENDS}
-CHUNKING_OPTIONS = {CHUNKING_LABELS[k]: k for k in CHUNKING_BACKENDS}
-EMBEDDING_OPTIONS = {EMBEDDING_LABELS[k]: k for k in EMBEDDING_BACKENDS}
-
-LLM_OPTIONS = {
-    f"OpenAI ({settings.llm_model})": "openai",
-    f"Mistral ({settings.mistral_model})": "mistral",
-    f"Qwen ({settings.qwen_model})": "qwen",
-}
-
-RETRIEVAL_OPTIONS = {
-    "MMR (Produktiv)": "mmr",
-    "Similarity (ohne MMR-Diversität)": "similarity",
-    "Rerank (Cross-Encoder)": "rerank",
-    "Hybrid (BM25 + Dense)": "hybrid",
-}
-
-
-def _format_duration(seconds: float) -> str:
-    if seconds < 90:
-        return f"~{seconds:.0f} Sek."
-    minutes = seconds / 60
-    if minutes < 90:
-        return f"~{minutes:.0f} Min."
-    return f"~{minutes / 60:.1f} Std."
 
 
 @st.cache_resource(show_spinner=False)
-def _get_chain(
-    corpus_mode: str,
-    parser_key: str,
-    chunking_key: str,
-    embedding_key: str,
-    llm_provider: str,
-    retrieval_strategy: str,
-):
-    corpus = "full" if corpus_mode == "produktiv" else "demo"
+def _get_chain(pipeline_label: str):
+    pipeline = PIPELINES[pipeline_label]
     persist_directory, collection_name, embeddings = resolve_collection(
-        parser_key, chunking_key, embedding_key, corpus=corpus
+        pipeline["parser"], pipeline["chunking"], pipeline["embedding"], corpus=pipeline["corpus"]
     )
     vectorstore = load_vectorstore(persist_directory, collection_name, embeddings=embeddings)
-    return build_rag_chain(vectorstore, llm_provider=llm_provider, retrieval_strategy=retrieval_strategy)
+    return build_rag_chain(vectorstore, llm_provider=pipeline["llm"], retrieval_strategy=pipeline["retrieval"])
 
 
 def _messages_to_chat_history(messages: list[dict]) -> list[BaseMessage]:
@@ -109,6 +87,17 @@ def _messages_to_chat_history(messages: list[dict]) -> list[BaseMessage]:
         else:
             history.append(AIMessage(content=m["content"]))
     return history
+
+
+def _static_pdf_link(source_file: str, pdf_page_index: int) -> str:
+    """Baut einen PDF-Seiten-Link über Streamlits Static-File-Serving
+    (app/static/ -> static/-Symlink auf data/raw_pdfs/, siehe
+    .streamlit/config.toml). Anders als citations.py::source_pdf_link()
+    (file://-Link, fuer den Terminal-Chat) funktioniert das im Browser
+    zuverlaessig, weil der Link vom selben http(s)-Origin wie die
+    Streamlit-Seite kommt - file://-Links werden von modernen Browsern beim
+    Klick von einer http(s)-Seite aus blockiert."""
+    return f"app/static/{quote(source_file)}#page={pdf_page_index}"
 
 
 def _format_sources(source_documents) -> str:
@@ -122,7 +111,7 @@ def _format_sources(source_documents) -> str:
         seen.add(key)
         label = f"{meta.get('source_file')}, Seite {meta.get('page_number')}"
         if meta.get("pdf_page_index") is not None:
-            link = source_pdf_link(meta["source_file"], meta["pdf_page_index"])
+            link = _static_pdf_link(meta["source_file"], meta["pdf_page_index"])
             lines.append(f"- [{label}]({link})")
         else:
             lines.append(f"- {label}")
@@ -134,72 +123,11 @@ st.set_page_config(page_title="Abaqus Handbuch-Chatbot", page_icon="🛠️", la
 with st.sidebar:
     st.header("Einstellungen")
 
-    corpus_label = st.radio(
-        "Korpus",
-        ["Produktiv (voller Korpus, ~5.100 Seiten)", "Demo-Korpus (~53 Seiten)"],
-        index=0,
+    pipeline_label = st.radio("Pipeline", list(PIPELINES), index=0)
+    pipeline = PIPELINES[pipeline_label]
+    st.caption(
+        "  \n".join(f"**{label}:** {value}" for label, value in pipeline["components"])
     )
-    corpus_mode = "produktiv" if corpus_label.startswith("Produktiv") else "demo"
-    corpus = "full" if corpus_mode == "produktiv" else "demo"
-
-    st.subheader("Wissensbasis")
-    parser_label = st.selectbox("Parser", list(PARSER_OPTIONS), index=list(PARSER_OPTIONS.values()).index(DEFAULT_PARSER))
-    chunking_label = st.selectbox(
-        "Chunking", list(CHUNKING_OPTIONS), index=list(CHUNKING_OPTIONS.values()).index(DEFAULT_CHUNKING)
-    )
-    embedding_label = st.selectbox(
-        "Embedding", list(EMBEDDING_OPTIONS), index=list(EMBEDDING_OPTIONS.values()).index(DEFAULT_EMBEDDING)
-    )
-    parser_key = PARSER_OPTIONS[parser_label]
-    chunking_key = CHUNKING_OPTIONS[chunking_label]
-    embedding_key = EMBEDDING_OPTIONS[embedding_label]
-
-    if corpus_mode == "produktiv":
-        st.caption("Voller ~5.100-Seiten-Korpus.")
-    else:
-        st.caption("~53-Seiten-Demo-Korpus (siehe docs/PARSER.md) — nicht der volle Produktiv-Korpus.")
-
-    if not is_known_combination(parser_key, chunking_key, embedding_key, corpus=corpus):
-        estimate_s = estimate_build_seconds(parser_key, chunking_key, embedding_key, corpus=corpus)
-        parser_note = (
-            " (Parser bereits in dieser Sitzung ausgeführt — der teuerste Schritt entfällt.)"
-            if is_parser_cached(parser_key, corpus)
-            else ""
-        )
-        message = (
-            f"Diese Kombination wurde noch nie gebaut und wird jetzt beim ersten "
-            f"Absenden einer Frage einmalig neu erzeugt — geschätzte Bauzeit: "
-            f"**{_format_duration(estimate_s)}**{parser_note} (grobe Schätzung, siehe "
-            f"docs/PARSER.md, docs/EMBEDDING.md). Der gesamte Chatbot ist währenddessen "
-            f"blockiert. Danach ist die Kombination gecacht — und der Parser-Schritt "
-            f"bleibt für weitere Kombinationen mit demselben Parser in dieser Sitzung "
-            f"ebenfalls gecacht."
-        )
-        if estimate_s > 1800:
-            st.error(message, icon="🛑")
-        else:
-            st.warning(message, icon="⏳")
-
-    st.divider()
-
-    llm_label = st.selectbox("LLM", list(LLM_OPTIONS), index=0)
-    llm_provider = LLM_OPTIONS[llm_label]
-    if llm_provider == "mistral" and not mistral_available():
-        st.warning(
-            "MISTRAL_API_KEY ist nicht in .env gesetzt. "
-            "Bitte eintragen, um Mistral zu verwenden.",
-            icon="⚠️",
-        )
-
-    retrieval_label = st.selectbox("Retrieval-Strategie", list(RETRIEVAL_OPTIONS), index=0)
-    retrieval_strategy = RETRIEVAL_OPTIONS[retrieval_label]
-    if retrieval_strategy in ("rerank", "hybrid"):
-        st.caption(
-            "Braucht requirements-retrieval-comparison.txt (rank_bm25 / "
-            "sentence-transformers) und ist beim ersten Aufruf pro Sitzung "
-            "langsamer (Cross-Encoder-Modell-Download bzw. BM25-Indexaufbau, "
-            "siehe docs/RETRIEVAL.md)."
-        )
 
     st.divider()
     if st.button("Gesprächsverlauf zurücksetzen", use_container_width=True):
@@ -233,7 +161,7 @@ if question:
     with st.chat_message("assistant"):
         try:
             with st.spinner("Wissensbasis wird geladen (ggf. einmalig neu aufgebaut) ..."):
-                chain = _get_chain(corpus_mode, parser_key, chunking_key, embedding_key, llm_provider, retrieval_strategy)
+                chain = _get_chain(pipeline_label)
         except FileNotFoundError as exc:
             st.error(str(exc))
             st.stop()

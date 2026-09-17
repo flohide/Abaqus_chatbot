@@ -11,8 +11,7 @@ Richter-LLM ist für alle Kombinationen fest OpenAI (siehe eval/metrics.py)
 - unabhängig vom jeweils getesteten Embedding-Modell.
 
 Voraussetzung: die Embedding-Demo-Collections müssen bereits existieren
-(python scripts/build_embedding_demo_corpus.py) und MISTRAL_API_KEY muss in
-.env gesetzt sein.
+(python scripts/build_embedding_demo_corpus.py).
 
 Nutzung:
     python scripts/evaluate_embedding_ragas.py                                # volle Matrix (7 Modelle)

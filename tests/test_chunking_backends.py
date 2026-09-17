@@ -92,6 +92,82 @@ def test_header_recursive_size_variants_scale_chunk_count():
     assert len(small) > len(large)  # kleinere Chunks -> mehr Stück
 
 
+def test_header_recursive_merges_section_continuing_across_page_break():
+    # Seite 12 endet mitten im Abschnitt "Abschnitt 1.1", Seite 13 fuehrt ihn
+    # ohne neue Ueberschrift fort.
+    page_12 = PageDocument(
+        text="# Kapitel 1\n\n## Abschnitt 1.1\n\nErster Teil des Abschnitts.",
+        source_file="manual.pdf",
+        page_number="12",
+        pdf_page_index=14,
+    )
+    page_13 = PageDocument(
+        text="Fortsetzung desselben Abschnitts ohne eigene Ueberschrift.",
+        source_file="manual.pdf",
+        page_number="13",
+        pdf_page_index=15,
+    )
+
+    chunk = header_recursive_backend.build(chunk_size=800, chunk_overlap=150)
+    chunks = chunk([page_12, page_13])
+
+    assert len(chunks) == 1
+    merged = chunks[0]
+    assert "Erster Teil" in merged.page_content
+    assert "Fortsetzung desselben Abschnitts" in merged.page_content
+    assert merged.metadata["page_number"] == "12-13"
+    assert merged.metadata["pdf_page_index"] == 14  # Deep-Link zeigt auf die Startseite
+    assert "Abschnitt 1.1" in merged.metadata["section"]
+
+
+def test_header_recursive_does_not_merge_when_next_page_starts_with_heading():
+    page_12 = PageDocument(
+        text="# Kapitel 1\n\nText auf Seite 12.",
+        source_file="manual.pdf",
+        page_number="12",
+        pdf_page_index=14,
+    )
+    page_13 = PageDocument(
+        text="# Kapitel 2\n\nText auf Seite 13.",
+        source_file="manual.pdf",
+        page_number="13",
+        pdf_page_index=15,
+    )
+
+    chunk = header_recursive_backend.build(chunk_size=800, chunk_overlap=150)
+    chunks = chunk([page_12, page_13])
+
+    assert len(chunks) == 2
+    assert chunks[0].metadata["page_number"] == "12"
+    assert chunks[1].metadata["page_number"] == "13"
+
+
+def test_header_recursive_does_not_merge_across_non_consecutive_pages():
+    # Zwischen den physischen PDF-Positionen liegt eine vom Loader bereits
+    # herausgefilterte Leerseite (pdf_page_index springt von 14 auf 16) -
+    # trotz fehlender Ueberschrift auf der Folgeseite darf hier nicht
+    # zusammengefuehrt werden.
+    page_12 = PageDocument(
+        text="# Kapitel 1\n\nText auf Seite 12.",
+        source_file="manual.pdf",
+        page_number="12",
+        pdf_page_index=14,
+    )
+    page_14 = PageDocument(
+        text="Text ohne eigene Ueberschrift auf Seite 14.",
+        source_file="manual.pdf",
+        page_number="14",
+        pdf_page_index=16,
+    )
+
+    chunk = header_recursive_backend.build(chunk_size=800, chunk_overlap=150)
+    chunks = chunk([page_12, page_14])
+
+    assert len(chunks) == 2
+    assert chunks[0].metadata["page_number"] == "12"
+    assert chunks[1].metadata["page_number"] == "14"
+
+
 def test_recursive_only_has_no_section_and_respects_chunk_size():
     long_text = "Ein langer Satz mit Inhalt. " * 300
     page = PageDocument(text=long_text, source_file="manual.pdf", page_number="1", pdf_page_index=1)

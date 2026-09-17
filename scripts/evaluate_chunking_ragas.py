@@ -10,8 +10,7 @@ Richter-LLM ist für alle Kombinationen fest OpenAI (siehe eval/metrics.py)
 - vermeidet Self-Preference-Bias beim Modellvergleich.
 
 Voraussetzung: die Chunking-Demo-Collections müssen bereits existieren
-(python scripts/build_chunking_demo_corpus.py) und MISTRAL_API_KEY muss in
-.env gesetzt sein.
+(python scripts/build_chunking_demo_corpus.py).
 
 Nutzung:
     python scripts/evaluate_chunking_ragas.py                                # volle Matrix

@@ -31,6 +31,8 @@ def _default_embeddings() -> Embeddings:
         model=settings.embedding_model,
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url,
+        request_timeout=settings.api_request_timeout,
+        max_retries=settings.api_max_retries,
     )
 
 

@@ -39,6 +39,8 @@ def _openai_factory(name: str) -> Callable[[], Embeddings]:
             model=_resolve_openai_model(name),
             api_key=settings.openai_api_key,
             base_url=settings.openai_base_url,
+            request_timeout=settings.api_request_timeout,
+            max_retries=settings.api_max_retries,
         )
 
     return factory

@@ -67,11 +67,14 @@ def test_full_corpus_estimate_is_much_larger_than_demo_estimate():
     assert full_s > demo_s * 20  # ~5100 vs. ~53 Seiten
 
 
-def test_docling_estimate_is_much_larger_than_pymupdf4llm_on_full_corpus():
+def test_docling_estimate_is_larger_than_pymupdf4llm_on_full_corpus():
+    # Rate seit docs/PARSER.md "Nachtrag 2" mit warmem Modell-Cache neu gemessen
+    # (statt des ursprünglichen Cold-Start-Werts) - Docling ist auf dem vollen
+    # Korpus noch spürbar, aber nicht mehr um Größenordnungen langsamer.
     fast_s = estimate_build_seconds("pymupdf4llm", DEFAULT_CHUNKING, DEFAULT_EMBEDDING, corpus="full")
     slow_s = estimate_build_seconds("docling", DEFAULT_CHUNKING, DEFAULT_EMBEDDING, corpus="full")
-    assert slow_s > fast_s * 20
-    assert slow_s > 3600 * 20  # Docling auf vollem Korpus: mehrere Dutzend Stunden
+    assert slow_s > fast_s * 2
+    assert slow_s < 3600 * 2  # Docling auf vollem Korpus: unter 2 Std., nicht mehr "mehrere Dutzend Stunden"
 
 
 def test_semantic_chunking_increases_estimate():

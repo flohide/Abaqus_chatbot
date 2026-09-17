@@ -15,9 +15,12 @@ Voraussetzung: die Best-of-Breed-Collection muss bereits existieren
 `chunking_demo_header_recursive_800` (python scripts/build_chunking_demo_corpus.py
 header_recursive_800). MISTRAL_API_KEY muss in .env gesetzt sein.
 
+Standard-LLMs (ohne --llms): OpenAI, Mistral, GPT-4o.
+
 Nutzung:
     python scripts/evaluate_best_of_breed.py
     python scripts/evaluate_best_of_breed.py --llms openai
+    python scripts/evaluate_best_of_breed.py --corpus full   # voller Produktivkorpus statt Demo-Korpus
 """
 
 import argparse
@@ -49,34 +52,38 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--llms", nargs="+", choices=ANSWER_LLM_PROVIDERS, default=None)
     parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument("--corpus", choices=["demo", "full"], default="demo")
     args = parser.parse_args()
 
     console.print("[bold cyan]RAGAS-Vergleich: Best-of-Breed vs. Produktiv-Baseline[/bold cyan]")
-    console.print(f"LLMs: {args.llms or ANSWER_LLM_PROVIDERS}\n")
+    console.print(f"LLMs: {args.llms or ANSWER_LLM_PROVIDERS}")
+    console.print(f"Korpus: {args.corpus}\n")
 
     records = run_best_of_breed_evaluation(
         llm_providers=args.llms,
         concurrency=args.concurrency,
         on_progress=lambda msg: console.print(f"[dim]{msg}[/dim]"),
+        corpus=args.corpus,
     )
 
     df = pd.DataFrame(records)
 
     RESULTS_DIR.mkdir(exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    raw_path = RESULTS_DIR / f"best_of_breed_raw_{timestamp}.csv"
+    suffix = "_full" if args.corpus == "full" else ""
+    raw_path = RESULTS_DIR / f"best_of_breed{suffix}_raw_{timestamp}.csv"
     df.to_csv(raw_path, index=False)
     console.print(f"\n[bold green]Rohdaten gespeichert:[/bold green] {raw_path}")
 
     summary = df.groupby(["pipeline", "llm_provider"])[METRIC_COLUMNS].mean().round(3)
-    summary_path = RESULTS_DIR / f"best_of_breed_summary_{timestamp}.csv"
+    summary_path = RESULTS_DIR / f"best_of_breed{suffix}_summary_{timestamp}.csv"
     summary.to_csv(summary_path)
     console.print(f"[bold green]Zusammenfassung gespeichert:[/bold green] {summary_path}\n")
 
     console.print("[bold]Durchschnittliche Scores pro Pipeline × LLM:[/bold]")
     console.print(summary.to_string())
 
-    markdown_path = RESULTS_DIR / f"best_of_breed_summary_{timestamp}.md"
+    markdown_path = RESULTS_DIR / f"best_of_breed{suffix}_summary_{timestamp}.md"
     markdown_path.write_text(summary.reset_index().to_markdown(index=False))
     console.print(f"\n[bold green]Markdown-Tabelle gespeichert:[/bold green] {markdown_path}")
 

@@ -6,12 +6,14 @@ docs/PARSER.md, docs/CHUNKING.md, docs/EMBEDDING.md, docs/BEST_OF_BREED.md),
 wird diese direkt wiederverwendet; für neue, noch nie getestete
 Kombinationen wird einmalig eine neue Collection gebaut.
 
-**Wichtig für den vollen Korpus:** Docling/Unstructured (hi_res) sind bei
-~5.100 Seiten um Größenordnungen langsamer als bei den 53 Demo-Seiten (siehe
-docs/PARSER.md) - ein einzelner Build kann mehrere Stunden bis über einen
-Tag dauern und blockiert währenddessen den gesamten Streamlit-Prozess.
-`estimate_build_seconds()` liefert eine grobe Vorabschätzung dafür, damit
-die Sidebar davor warnen kann, statt den Build blind zu starten.
+**Wichtig für den vollen Korpus:** Unstructured (hi_res) ist bei ~5.100
+Seiten mit geschätzt mehreren Stunden Laufzeit nicht praktikabel und
+blockiert währenddessen den gesamten Streamlit-Prozess. Docling ist zwar
+ebenfalls deutlich langsamer als PyMuPDF4LLM, mit geschätzt ~50 Min. für
+den vollen Korpus aber grundsätzlich machbar (Hochrechnung aus zwei warmen
+Läufen, siehe `_PARSER_SECONDS_PER_PAGE` unten). `estimate_build_seconds()`
+liefert eine grobe Vorabschätzung dafür, damit die Sidebar davor warnen
+kann, statt den Build blind zu starten.
 
 Retrieval-Strategie und Antwort-LLM sind bewusst **nicht** Teil dieser
 Auflösung - beide sind reine Query-Zeit-Entscheidungen (siehe
@@ -184,9 +186,9 @@ def resolve_collection(
 
     Baut die Collection einmalig neu, falls sie weder als bekannte Collection
     noch schon auf der Platte vorhanden ist. **Für `corpus="full"` mit
-    Docling/Unstructured kann das mehrere Stunden dauern** (siehe
-    `estimate_build_seconds()`, docs/PARSER.md) - vorher prüfen, nicht blind
-    aufrufen."""
+    Unstructured kann das mehrere Stunden dauern, mit Docling schätzungsweise
+    ~50 Min.** (siehe `estimate_build_seconds()`, docs/PARSER.md) - vorher
+    prüfen, nicht blind aufrufen."""
     embeddings = None if embedding_key == DEFAULT_EMBEDDING else EMBEDDING_BACKENDS[embedding_key]()
     known_map = _KNOWN_FULL_COLLECTIONS if corpus == "full" else _KNOWN_DEMO_COLLECTIONS
     known = known_map.get((parser_key, chunking_key, embedding_key))
@@ -216,7 +218,7 @@ _PARSER_SECONDS_PER_PAGE = {
     "pymupdf4llm": 0.175,  # docs/PARSER.md: 1,05s / 6 Seiten
     "pdfplumber": 0.06,  # docs/PARSER.md: 0,36s / 6 Seiten
     "unstructured": 3.10,  # real gemessen (build_best_of_breed_demo.py): 164,3s / 53 Seiten
-    "docling": 22.18,  # docs/PARSER.md: 133,1s / 6 Seiten
+    "docling": 0.59,  # Mittel aus zwei warmen Läufen (0,94 s/S. auf 53 gemischten Demo-Seiten, 0,24 s/S. auf 300 Seiten Fließtext) - Rate schwankt deutlich mit Tabellen-/Bildanteil
 }
 _HF_EMBEDDING_KEYS = {"multilingual-e5-large", "bge-m3", "paraphrase-multilingual-mpnet", "minilm-l6-en"}
 _EMBED_SECONDS_PER_CHUNK_HF = 0.46  # real gemessen: ~80s (abzgl. Parse/Chunk) / 174 Chunks

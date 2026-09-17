@@ -11,6 +11,12 @@ def parse(pdf_path: Path) -> dict[int, str]:
     elements = partition_pdf(str(pdf_path), strategy="hi_res", infer_table_structure=True)
     pages: dict[int, list[str]] = {}
     for element in elements:
+        if element.text is None:
+            # Manche Elementtypen (z. B. reine Bild-/PageBreak-Elemente ohne
+            # erkannten Text) liefern None statt "" - auf dem 53-Seiten-Demo-
+            # Korpus nie aufgetreten, aber auf dem vollen ~5.100-Seiten-Korpus
+            # schon.
+            continue
         page_no = element.metadata.page_number or 1
         pages.setdefault(page_no, []).append(element.text)
     return {page_no: "\n".join(texts) for page_no, texts in pages.items()}

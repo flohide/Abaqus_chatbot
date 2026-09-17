@@ -1,5 +1,7 @@
 """Terminal-Chat-Interface für den Abaqus-Handbuch-Chatbot."""
 
+import itertools
+
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from rich.console import Console
 from rich.markdown import Markdown
@@ -36,6 +38,19 @@ def _format_sources(source_documents) -> str:
         else:
             lines.append(f"  • {label}")
     return "\n".join(lines)
+
+
+def _visual_line_count(text: str, width: int) -> int:
+    """Anzahl der Terminalzeilen, die `text` beim zeilenweisen Ausgeben mit
+    print() belegt (inkl. Zeilenumbruch durch die Terminalbreite) - Grundlage
+    dafür, den bereits gedruckten Rohtext-Stream per ANSI-Cursor wieder zu
+    löschen und durch die gerenderte Markdown-Fassung zu ersetzen."""
+    if width <= 0:
+        return text.count("\n") + 1
+    total = 0
+    for line in text.split("\n"):
+        total += max(1, -(-len(line) // width))  # ceil division
+    return total
 
 
 def run_chat() -> None:
@@ -77,21 +92,57 @@ def run_chat() -> None:
             console.print(HELP_TEXT)
             continue
 
-        with console.status("[bold green]Suche im Handbuch ..."):
-            try:
-                result = chain.invoke({"question": question, "chat_history": chat_history})
-            except Exception as exc:  # API-/Netzwerkfehler nicht den Chat abbrechen lassen
-                console.print(f"[bold red]Fehler bei der Anfrage:[/bold red] {exc}")
-                continue
+        stream = chain.stream({"question": question, "chat_history": chat_history})
+        try:
+            with console.status("[bold green]Suche im Handbuch ..."):
+                # Erzeugt noch keine Tokens - liest nur den ersten Chunk an, damit
+                # der Spinner bis zum tatsächlichen Start der Antwort läuft.
+                first_chunk = next(stream, None)
+        except Exception as exc:  # API-/Netzwerkfehler nicht den Chat abbrechen lassen
+            console.print(f"[bold red]Fehler bei der Anfrage:[/bold red] {exc}")
+            continue
 
         console.print("[bold blue]Bot:[/bold blue]")
-        console.print(Markdown(result["answer"]))
+        source_documents: list = []
+        answer_parts: list[str] = []
+        remaining = itertools.chain([first_chunk] if first_chunk is not None else [], stream)
+        stream_error: Exception | None = None
+        try:
+            for chunk in remaining:
+                if "source_documents" in chunk:
+                    source_documents = chunk["source_documents"]
+                if "answer" in chunk:
+                    token = chunk["answer"]
+                    answer_parts.append(token)
+                    print(token, end="", flush=True)  # rohe Tokens für sofortige Anzeige waehrend des Streamens
+        except Exception as exc:
+            # Bereits gestreamte Tokens bleiben erhalten (siehe answer_parts
+            # unten) statt verworfen zu werden - sonst laufen sichtbarer
+            # Chatverlauf und chat_history auseinander.
+            stream_error = exc
+        print()
 
-        sources = _format_sources(result["source_documents"])
+        answer = "".join(answer_parts)
+
+        if answer and console.is_terminal:
+            # Rohtext-Stream durch eine einmalige Markdown-Renderung ersetzen,
+            # statt ihn dauerhaft als Rohtext stehen zu lassen (Trade-off aus
+            # Punkt 5: waehrend des Streamens weiterhin Rohtext, da Markdown-
+            # Rendering den vollstaendigen Text voraussetzt).
+            printed_lines = _visual_line_count(answer, console.width)
+            console.file.write(f"\033[{printed_lines}A\033[J")
+            console.file.flush()
+            console.print(Markdown(answer))
+
+        if stream_error is not None:
+            console.print(f"[bold red]Fehler bei der Anfrage:[/bold red] {stream_error}")
+
+        sources = _format_sources(source_documents)
         if sources:
             console.print("[dim]Quellen:[/dim]")
             console.print(f"[dim]{sources}[/dim]")
         console.print()
 
         chat_history.append(HumanMessage(content=question))
-        chat_history.append(AIMessage(content=result["answer"]))
+        if answer:
+            chat_history.append(AIMessage(content=answer))

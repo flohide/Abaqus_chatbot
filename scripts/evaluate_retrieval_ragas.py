@@ -12,9 +12,9 @@ Retrieval-Strategien wirken nur zur Query-Zeit.
 Richter-LLM ist für alle Kombinationen fest OpenAI (siehe eval/metrics.py).
 
 Voraussetzung: die Chunking-Demo-Collection `chunking_demo_header_recursive_800`
-muss bereits existieren (python scripts/build_chunking_demo_corpus.py),
-`requirements-retrieval-comparison.txt` installiert sein (für "rerank"/
-"hybrid") und MISTRAL_API_KEY muss in .env gesetzt sein.
+muss bereits existieren (python scripts/build_chunking_demo_corpus.py);
+"rerank"/"hybrid" brauchen `rank_bm25`/`sentence-transformers`, die bereits
+Teil von requirements.txt sind.
 
 Nutzung:
     python scripts/evaluate_retrieval_ragas.py                          # volle Matrix

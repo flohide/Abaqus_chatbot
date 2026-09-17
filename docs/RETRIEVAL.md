@@ -46,7 +46,7 @@ Zwei Implementierungsdetails:
   direkt (eigene Tokenisierung), statt über
   `langchain_community.retrievers.BM25Retriever` zu gehen — das Paket ist
   laut Upstream im Sunsetting-Modus (gleiches Argument wie beim
-  `_ragas_compat`-Stub, siehe `EVALUATION.md`).
+  `_ragas_compat`-Stub, siehe `RAGAS.md`).
 - **Reciprocal Rank Fusion (RRF):** `hybrid` kombiniert BM25- und
   Dense-Ranking über `Score(d) = Σ 1/(rrf_k + rank)` (`rrf_k=60`, Standard
   aus der RRF-Literatur) statt eine LangChain-`EnsembleRetriever`-Abhängigkeit
@@ -55,102 +55,32 @@ Zwei Implementierungsdetails:
 ## Methodik
 
 Kein Demo-Korpus-Build nötig (siehe oben) — direkt RAGAS-Evaluation
-(identisches 12-Fragen-Set, fester OpenAI-Richter, siehe
-[`EVALUATION.md`](EVALUATION.md)):
+(identisches 12-Fragen-Set, fester `gpt-4o-mini`-Richter, siehe
+[`RAGAS.md`](RAGAS.md)):
 
 ```bash
-pip install -r requirements-retrieval-comparison.txt   # nur für "rerank"/"hybrid" nötig
 pip install -r requirements-eval.txt
 python scripts/build_chunking_demo_corpus.py header_recursive_800   # falls noch nicht geschehen
 python scripts/evaluate_retrieval_ragas.py
 ```
 
 Ergebnisse landen in `eval_results/retrieval_ragas_{raw,summary}_<timestamp>.{csv,md}`
-(gitignored). Live vergleichbar auch im Streamlit-Frontend (`app.py`): alle
-vier Strategien stehen in der Sidebar unter "Retrieval-Strategie" zur
-Auswahl — orthogonal zur Wissensbasis, wirkt also auf jede beliebige
-gewählte Collection.
+(gitignored). Interaktiv vergleichbar über [`docs/dashboard.html`](dashboard.html)
+(Tab "Retrieval").
 
 ## Ergebnisse
 
-Vollständiger Lauf: 4 Retrieval-Strategien × 2 LLMs = 8 Kombinationen × 12
-Fragen = 96 Instanzen × 5 Metriken = 480 Einzel-Scores, **0 Fehler, 0
-fehlende Werte**. Laufzeit: ~18–27 s pro Kombination für die
-Antwortgenerierung (`rerank` beim ersten Aufruf zusätzlich ein einmaliger
-Cross-Encoder-Download), ~4,7 Min. für die gesamte Metrik-Berechnung
-(Concurrency=4). Rohdaten:
-[`eval_results/retrieval_ragas_raw_20260812_200254.csv`](../eval_results/retrieval_ragas_raw_20260812_200254.csv)
+Vollständiger Lauf: 4 Retrieval-Strategien × 12 Fragen = 48 Instanzen × 5
+Metriken = 240 Einzel-Scores, **0 Fehler, 0 fehlende Werte**. Rohdaten:
+[`eval_results/retrieval_ragas_raw_20260914_044238.csv`](../eval_results/retrieval_ragas_raw_20260914_044238.csv)
 (git-ignored — lokal reproduzierbar über `scripts/evaluate_retrieval_ragas.py`).
 
 ### Gesamtranking (Mittelwert über alle 5 Metriken)
 
-| Rang | Retrieval-Strategie | LLM | Faithfulness | AnswerRelevancy | ContextPrecision | ContextRecall | FactualCorrectness | ⌀ |
-|---|---|---|---|---|---|---|---|---|
-| 1 | Rerank | OpenAI | 0.898 | 0.876 | 0.826 | **1.000** | 0.713 | **0.863** |
-| 2 | Rerank | Mistral | 0.854 | 0.794 | 0.826 | **1.000** | 0.704 | **0.836** |
-| 3 | Similarity | OpenAI | 0.940 | 0.877 | 0.825 | 0.875 | 0.642 | **0.832** |
-| 4 | Hybrid | OpenAI | 0.931 | 0.796 | 0.809 | 0.875 | 0.644 | **0.811** |
-| 5 | Similarity | Mistral | 0.844 | 0.695 | 0.825 | 0.875 | 0.664 | **0.781** |
-| 6 | MMR (Produktiv) | OpenAI | 0.750 | 0.813 | 0.822 | 0.792 | 0.578 | **0.751** |
-| 7 | Hybrid | Mistral | 0.717 | 0.673 | 0.809 | 0.875 | 0.613 | **0.737** |
-| 8 | MMR (Produktiv) | Mistral | 0.796 | 0.655 | 0.822 | 0.792 | 0.482 | **0.709** |
+| Rang | Retrieval-Strategie | Faithfulness | AnswerRelevancy | ContextPrecision | ContextRecall | FactualCorrectness | ⌀ |
+|---|---|---|---|---|---|---|---|
+| 1 | Rerank | 0.938 | 0.880 | 0.840 | **1.000** | 0.686 | **0.869** |
+| 2 | Similarity | 0.899 | 0.876 | 0.864 | **1.000** | 0.619 | **0.852** |
+| 3 | Hybrid | 0.781 | 0.809 | 0.855 | **1.000** | 0.704 | **0.830** |
+| 4 | MMR (Produktiv) | 0.856 | 0.735 | **0.901** | 0.917 | 0.596 | **0.801** |
 
-### Retrieval-Qualität pro Strategie (LLM-unabhängig)
-
-`context_precision`/`context_recall` hängen ausschließlich vom Retrieval ab,
-nicht vom antwortenden LLM — fallen wie bei den anderen Vergleichen zwischen
-OpenAI- und Mistral-Läufen **identisch** aus:
-
-| Retrieval-Strategie | ContextPrecision | ContextRecall |
-|---|---|---|
-| Rerank | **0.826** | **1.000** |
-| Similarity | 0.825 | 0.875 |
-| MMR (Produktiv) | 0.822 | 0.792 |
-| Hybrid | 0.809 | 0.875 |
-
-### Einordnung
-
-- **Rerank gewinnt klar und ohne Trade-off:** beste ContextPrecision *und*
-  perfekte ContextRecall (1.000 — alle für die Referenzantworten nötigen
-  Chunks wurden in jeder der 12 Fragen gefunden) gleichzeitig. Der
-  Cross-Encoder bewertet die 20 MMR-Kandidaten nach tatsächlicher
-  Query-Relevanz neu, statt sich (wie MMR) zusätzlich um Diversität zu
-  kümmern — auf diesem Demo-Korpus zahlt sich das eindeutig aus. Schließt
-  den in `DOKUMENTATION.md` §13 offen notierten Punkt.
-- **Überraschung: `similarity` (keine MMR-Diversität) schlägt `mmr`
-  (Produktiv) bei beiden Retrieval-Metriken** (Precision 0.825 vs. 0.822,
-  Recall 0.875 vs. 0.792) — das isolierte Vergleichspaar zeigt, dass MMRs
-  Diversitäts-Optimierung auf diesem kompakten 53-Seiten-Korpus tendenziell
-  eher schadet als hilft: Sie tauscht gelegentlich einen direkt relevanten
-  Chunk gegen einen "diverseren", aber weniger relevanten. **MMR hat die
-  schlechteste ContextRecall aller vier Strategien** (0.792) — ausgerechnet
-  die Produktiv-Baseline. Bei einem großen, thematisch redundanteren
-  Produktivkorpus (~5.100 Seiten) könnte sich das Bild umkehren, da dort das
-  Risiko vieler nahezu identischer Chunks aus derselben Seite/demselben
-  Abschnitt deutlich höher ist.
-- **Hybrid (BM25 + Dense) hilft hier nicht:** trotz des Arguments für exakte
-  Keyword-Treffer (`*STEP` etc.) liegt Hybrid bei ContextPrecision am
-  niedrigsten aller vier Strategien (0.809) — die getesteten 12 Fragen
-  enthalten wenige exakte Keyword-Lookups, das BM25-Signal fügt in der RRF-
-  Fusion hier eher Rauschen als Präzision hinzu. Ein Vergleichspaar, dessen
-  erwarteter Vorteil sich in dieser Stichprobe nicht bestätigt — ein
-  Fragenset mit mehr Keyword-Referenz-Fragen (z. B. `*STEP`-Parameter,
-  Keyword-Syntax) wäre ein faireres Testfeld für Hybrid-Retrieval.
-- **OpenAI übertrifft Mistral bei allen 4 Retrieval-Strategien im
-  Gesamtmittel** — durchgängiges Muster über alle vier Vergleichsdimensionen
-  hinweg (Parser, Chunking, Embedding, Retrieval).
-- **FactualCorrectness bleibt über alle Kombinationen hinweg die niedrigste
-  Metrik** (0.48–0.71) — typisch für dieses RAGAS-Maß; hier allerdings mit
-  klarem Zusammenhang zur Retrieval-Strategie: Rerank hat mit 0.70–0.71
-  auch bei FactualCorrectness die höchsten Werte aller vier Strategien —
-  bessere Kontexte führen offenbar auch zu faktisch korrekteren Antworten.
-
-**Wichtige Einschränkung:** Wie bei den anderen Vergleichen ist n=12 Fragen
-auf einem 53-Seiten-Demo-Korpus eine kleine Stichprobe für 96
-LLM-bewertete Instanzen — geeignet, um klare Tendenzen sichtbar zu machen
-(den Rerank-Vorsprung, die MMR-Recall-Schwäche), aber nicht, um knappe
-Unterschiede (z. B. Rang 3 vs. 4) als statistisch gesichert zu
-interpretieren. Insbesondere die perfekte ContextRecall von Rerank sollte
-nicht als Garantie für größere Korpora gelesen werden — bei mehr
-Kandidaten und mehr potenziell relevanten Chunks pro Frage wird perfekte
-Recall schwerer zu erreichen.
