@@ -71,8 +71,12 @@ Metriken = 360 Einzel-Scores, **0 Fehler, 0 fehlende Werte**. Rohdaten:
 
 **Wichtige Einschränkung:** Diese Auswertung läuft auf dem
 53-Seiten-Demo-Korpus, nicht auf dem vollen ~5.100-Seiten-Produktivkorpus.
-Die Best-of-Breed-Collection wurde zwar zusätzlich auch für den vollen
-Korpus gebaut und ist in `app.py::PIPELINES` produktiv nutzbar — eine
-offizielle RAGAS-Validierung auf dem vollen Korpus ist aber bewusst nicht
-Teil dieser Arbeit (Laufzeit-/Scope-Gründe).
+Die Best-of-Breed-Collection wurde zwar zusätzlich für den vollen Korpus
+gebaut (`vectorstore_full_custom/`) und war zeitweise über
+`app.py::PIPELINES` im Web-Frontend nutzbar — die Pipeline-Auswahl wurde
+seitdem aber entfernt, da `scripts/ingest.py` diese Collection nicht mit
+aufbaut und der automatische Nachbau ca. 5 Std. dauert (siehe
+`docs/DOKUMENTATION.md`, Abschnitt 12). Eine offizielle RAGAS-Validierung
+auf dem vollen Korpus ist zudem bewusst nicht Teil dieser Arbeit
+(Laufzeit-/Scope-Gründe).
 

@@ -39,9 +39,8 @@ python scripts/evaluate_llm_ragas.py --llms openai mistral gpt4o
 
 Ergebnisse landen in `eval_results/llm_ragas_{raw,summary}_<timestamp>.{csv,md}`
 (gitignored). Im Streamlit-Frontend (`app.py`) ist das Antwort-LLM dagegen
-**nicht** frei wählbar — es ist pro Pipeline fest vorgegeben (`gpt-4o-mini`
-bei Produktiv, GPT-4o bei Best-of-Breed, siehe `README.md`/`DOKUMENTATION.md`
-Abschnitt 12).
+**nicht** frei wählbar — die App bietet nur die feste Produktiv-Pipeline mit
+`gpt-4o-mini` an, siehe `README.md`/`DOKUMENTATION.md` Abschnitt 12.
 
 ## Ergebnisse
 

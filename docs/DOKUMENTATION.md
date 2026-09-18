@@ -454,7 +454,6 @@ Alle Einstellungen liegen typsicher in `src/rag_manual_bot/config.py`
 | `CHUNK_OVERLAP` | `150` | Überlappung zwischen benachbarten Fallback-Chunks. |
 | `RETRIEVAL_K` | `5` | Anzahl finaler Chunks pro Anfrage. |
 | `RETRIEVAL_FETCH_K` | `20` | Kandidatenpool für MMR, aus dem `k` ausgewählt wird. |
-| `GPT4O_MODEL` | `gpt-4o` | Antwort-LLM der Best-of-Breed-Pipeline in `app.py` (siehe 12), läuft über denselben Key/Hub wie `LLM_MODEL`. |
 | `API_REQUEST_TIMEOUT` | `60` | Timeout (Sekunden) für alle OpenAI-/Mistral-API-Clients (LLMs, Embeddings). |
 | `API_MAX_RETRIES` | `2` | Retry-Anzahl für dieselben API-Clients. |
 
@@ -469,6 +468,7 @@ Zusätzlich fest im Code (nicht über `.env` gesteuert, da projektspezifisch):
 |---|---|---|
 | `MISTRAL_API_KEY` | *(optional)* | Für Mistral als Antwort-LLM im LLM-/Best-of-Breed-Vergleich (`docs/LLM.md`, `docs/BEST_OF_BREED.md`); ohne Key laufen die betroffenen `evaluate_*`-Skripte mit Mistral nicht. |
 | `MISTRAL_MODEL` | `mistral-small-latest` | Mistral-Antwort-LLM-Variante. |
+| `GPT4O_MODEL` | `gpt-4o` | Antwort-LLM-Variante im LLM-/Best-of-Breed-RAGAS-Vergleich (`docs/LLM.md`, `docs/BEST_OF_BREED.md`), läuft über denselben Key/Hub wie `LLM_MODEL`; seit Entfernen der Pipeline-Auswahl in `app.py` (siehe Abschnitt 12) nicht mehr produktiv genutzt. |
 | `ANTHROPIC_API_KEY` | *(optional)* | Für den unabhängigen Claude-Richter (`eval/metrics.py::build_judge_metrics(provider="anthropic")`, siehe 12.7/12.8); erforderlich für `scripts/evaluate_*_ragas.py`. |
 | `JUDGE_MODEL` | `claude-sonnet-5` | Claude-Richter-Modell. |
 
@@ -637,37 +637,33 @@ End-to-End-Lauf mit den Handbüchern `Abaqus2017_GETTINGSTARTED.pdf`,
 
 Ergänzend zum Terminal-Chat (Abschnitt 6) gibt es ein Streamlit-Frontend
 (`app.py`, `streamlit run app.py`) mit klassischer Chat-Optik
-(`st.chat_message`/`st.chat_input`) und einer Sidebar mit genau einem
-Auswahlfeld: der **Pipeline** (Radio-Button). Zur Auswahl stehen zwei fest
-definierte Gesamt-Pipelines (`app.py::PIPELINES`), beide auf dem vollen
-~5.100-Seiten-Produktivkorpus:
+(`st.chat_message`/`st.chat_input`). Es bietet bewusst **nur die
+Produktiv-Pipeline** an (`app.py::PIPELINES`, ein einziger Eintrag) — kein
+Pipeline-Auswahlfeld/Radio-Button mehr in der Sidebar:
 
 - **Produktiv** — PyMuPDF4LLM + Header+Recursive 800 +
   `text-embedding-3-small` + MMR + `gpt-4o-mini` (der in Abschnitt 12.2–12.6
-  als Produktiv-Default verwendete Aufbau).
-- **Best-of-Breed** — Unstructured + Semantic Chunking +
-  `text-embedding-3-large` + Rerank + **GPT-4o** (die Kombination aus 12.7,
-  per RAGAS auf dem vollen Korpus validiert).
+  als Produktiv-Default verwendete Aufbau), voller ~5.100-Seiten-Korpus.
 
-Beide Pipelines laden über `ingestion/custom_demo.py::resolve_collection()`
-ihre Collection. `vectorstore/` (Produktiv) und `vectorstore_full_custom/`
-(Best-of-Breed) sind zu groß für GitHub (siehe `README.md`, "Setup") und
-daher nicht Teil des Repos — `vectorstore/` entsteht einmalig über `python
-scripts/ingest.py` (~13 Min.); für `vectorstore_full_custom/` gibt es kein
-schnelles Setup-Skript, `resolve_collection()` baut eine fehlende Collection
-zwar automatisch beim ersten Aufruf (`app.py`s Lade-Spinner weist
-entsprechend auf "ggf. einmalig neu aufgebaut" hin), das dauert wegen
-Unstructured `hi_res` auf ~5.100 Seiten aber ca. 5 Std. (siehe
-`docs/PARSER.md`). Das Antwort-LLM ist pipeline-fest vorgegeben: `gpt-4o-mini` bei
-Produktiv, **GPT-4o** bei Best-of-Breed (begründet durch den Befund aus
-12.7, dass GPT-4o dort das mit Abstand stärkste Antwort-LLM ist) — und
-**nicht** separat umschaltbar; ein früherer, unabhängiger
-LLM-Dropdown existiert in der aktuellen `app.py` nicht mehr. Der freie
-Wechsel zwischen den drei Antwort-LLMs (OpenAI-mini, GPT-4o, Mistral)
-bleibt ausschließlich der RAGAS-Studie (Abschnitt 12.8, `docs/LLM.md`)
-vorbehalten. Die einzelnen Demo-Korpus-Vergleichsstudien (Parser 12.2–12.3,
-Chunking 12.4, Embedding 12.5, Retrieval 12.6) sind über die App ebenfalls
-nicht live auswählbar — sie laufen ausschließlich über die jeweiligen
+**Best-of-Breed steht im Frontend bewusst nicht mehr zur Wahl:** Die
+Pipeline (Unstructured + Semantic Chunking + `text-embedding-3-large` +
+Rerank + GPT-4o, siehe 12.7) bräuchte `vectorstore_full_custom/` — das ist
+zu groß für GitHub (siehe `README.md`, "Setup") und daher nicht Teil des
+Repos, und anders als bei der Produktiv-Collection (`python
+scripts/ingest.py`, ~13 Min.) gibt es dafür kein schnelles Setup-Skript.
+`ingestion/custom_demo.py::resolve_collection()` würde eine fehlende
+Best-of-Breed-Collection zwar automatisch beim ersten Aufruf bauen, das
+dauert wegen Unstructured `hi_res` auf ~5.100 Seiten aber ca. 5 Std. (siehe
+`docs/PARSER.md`) — mitten im Streamlit-Request, ohne dass das wie ein
+gewollter Vorgang statt einem Hänger aussähe. Um das zu vermeiden, wurde
+die Pipeline-Auswahl komplett entfernt; die Best-of-Breed-Ergebnisse aus
+12.7/`docs/BEST_OF_BREED.md` bleiben davon unberührt gültig, sind über die
+App aber nicht mehr erreichbar. Der freie Wechsel zwischen den drei
+Antwort-LLMs (OpenAI-mini, GPT-4o, Mistral) bleibt ausschließlich der
+RAGAS-Studie (Abschnitt 12.8, `docs/LLM.md`) vorbehalten. Die einzelnen
+Demo-Korpus-Vergleichsstudien (Parser 12.2–12.3, Chunking 12.4, Embedding
+12.5, Retrieval 12.6) sind über die App ebenfalls nicht live auswählbar —
+sie laufen ausschließlich über die jeweiligen
 `scripts/evaluate_*_ragas.py`-Skripte.
 
 ### 12.1 LLM-Provider-Auswahl (`get_llm()`)
@@ -873,8 +869,9 @@ nicht bei jeder Einzelmetrik und jedem LLM gleichermaßen — mit GPT-4o
 gewinnt Best-of-Breed alle fünf Metriken, mit Mistral und, geringfügig,
 mit GPT-4o-mini sinkt die Faithfulness gegenüber der Baseline. Innerhalb
 von Best-of-Breed ist GPT-4o mit Abstand das stärkste Antwort-LLM (⌀ 0,863
-vor GPT-4o-mini 0,821 und Mistral 0,772) — die Produktiv-App bietet
-Best-of-Breed entsprechend standardmäßig mit GPT-4o als Antwort-LLM an.
+vor GPT-4o-mini 0,821 und Mistral 0,772) — entsprechend war GPT-4o dort
+als Antwort-LLM vorgesehen, als Best-of-Breed noch über die App wählbar
+war (siehe Abschnitt 12 zur inzwischen entfernten Pipeline-Auswahl).
 Details: [`docs/BEST_OF_BREED.md`](BEST_OF_BREED.md).
 
 ### 12.8 Antwort-LLM-Vergleich (3 Modelle, RAGAS)

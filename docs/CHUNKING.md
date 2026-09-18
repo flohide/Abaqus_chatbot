@@ -67,8 +67,8 @@ gruppierte Zusammenfassung.
 
 Interaktiv vergleichbar über [`docs/dashboard.html`](dashboard.html) (Tab
 "Chunking"). Im Streamlit-Frontend (`app.py`) sind die sechs
-Chunking-Strategien dagegen nicht live wählbar — dort steht nur die
-Pipeline-Wahl (Produktiv/Best-of-Breed) zur Verfügung, siehe `README.md`.
+Chunking-Strategien dagegen nicht live wählbar — dort läuft ausschließlich
+die feste Produktiv-Pipeline, siehe `README.md`.
 
 ## Ergebnisse
 

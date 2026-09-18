@@ -41,7 +41,7 @@ Code-Einsatz: [`docs/RAGAS.md`](docs/RAGAS.md))
 |---|---|---|
 | Vektor-DB | [Chroma](https://www.trychroma.com/) (lokal, persistent) | Keine Server-Infrastruktur nötig, gute LangChain-Integration, Metadaten-Filterung möglich. |
 | Memory | Einfache Nachrichtenliste in der Chat-Session | Ausreichend für ein Single-User-Tool, kein Session-Store nötig. |
-| Frontend | [Streamlit](https://streamlit.io/) (`st.chat_message`/`st.chat_input`) | Klassische Chat-Optik mit wenig Code, Sidebar mit Radio-Button zur Pipeline-Auswahl (Produktiv/Best-of-Breed). |
+| Frontend | [Streamlit](https://streamlit.io/) (`st.chat_message`/`st.chat_input`) | Klassische Chat-Optik mit wenig Code, bietet bewusst nur die Produktiv-Pipeline an (kein Pipeline-Auswahlfeld, siehe "Nutzung"). |
 ## Projektstruktur
 
 ```
@@ -141,21 +141,13 @@ MISTRAL_API_KEY=...
 MISTRAL_MODEL=mistral-small-latest
 ```
 
-> **Für Gutachter/innen:** Die fertig gebauten Vectorstore-Collections
-> (`vectorstore/`, `vectorstore_full_custom/`) sind **nicht** Teil dieses
-> Repos — ihr HNSW-Index allein ist ~295 MB bzw. ~99 MB groß und würde
-> GitHubs 100-MB-Datei-Limit sprengen. Die Quell-PDFs (`data/raw_pdfs/`,
-> zusammen ~52 MB) sind dagegen enthalten. Einmalig `python
-> scripts/ingest.py` laufen lassen (siehe "Nutzung" unten, ~13 Min.), dann
-> ist die **Produktiv**-Pipeline (Terminal-Chat und Web-Frontend) nutzbar.
->
-> ⚠️ Die **Best-of-Breed**-Pipeline im Web-Frontend braucht zusätzlich
-> `vectorstore_full_custom/` — dafür gibt es kein schnelles Setup-Skript.
-> Wird sie im Frontend ausgewählt, ohne dass die Collection existiert, baut
-> `app.py` sie beim ersten Aufruf automatisch, aber das dauert wegen
-> Unstructured `hi_res` auf ~5.100 Seiten **ca. 5 Stunden** (siehe
-> `docs/PARSER.md`) — kein Hänger/Bug, sondern der erwartete Einmal-Build.
-> Für eine schnelle Durchsicht empfiehlt sich die Produktiv-Pipeline.
+> **Für Gutachter/innen:** Die fertig gebaute Vectorstore-Collection
+> (`vectorstore/`) ist **nicht** Teil dieses Repos — ihr HNSW-Index allein
+> ist ~295 MB groß und würde GitHubs 100-MB-Datei-Limit sprengen. Die
+> Quell-PDFs (`data/raw_pdfs/`, zusammen ~52 MB) sind dagegen enthalten.
+> Einmalig `python scripts/ingest.py` laufen lassen (siehe "Nutzung" unten,
+> ~13 Min.), dann ist die Anwendung (Terminal-Chat und Web-Frontend)
+> nutzbar.
 
 ## Nutzung
 
@@ -181,24 +173,17 @@ MISTRAL_MODEL=mistral-small-latest
    streamlit run app.py
    ```
 
-   Sidebar bietet ein einziges Auswahlfeld: die **Pipeline** (Radio,
-   `app.py::PIPELINES`). Zur Auswahl stehen genau zwei fest definierte
-   Gesamt-Pipelines, beide auf dem vollen ~5.100-Seiten-Produktivkorpus:
-
-   - **Produktiv** — PyMuPDF4LLM + Header+Recursive 800 +
-     `text-embedding-3-small` + MMR + `gpt-4o-mini`.
-   - **Best-of-Breed** — Unstructured + Semantic Chunking +
-     `text-embedding-3-large` + Rerank + GPT-4o (siehe `docs/BEST_OF_BREED.md`).
-
-   Beide laden ihre Collection über `resolve_collection()`: Produktiv nach
-   `python scripts/ingest.py` sofort verfügbar, Best-of-Breed baut sich beim
-   ersten Aufruf automatisch selbst (ca. 5 Std., siehe Hinweis oben unter
-   "Für Gutachter/innen"). Das Antwort-LLM ist pipeline-fest vorgegeben
-   (`gpt-4o-mini` bei Produktiv, GPT-4o bei Best-of-Breed, begründet durch
-   den Befund aus `docs/BEST_OF_BREED.md`) und **nicht** separat umschaltbar
-   — anders als in einer früheren Version der App gibt es kein eigenes
-   LLM-Dropdown mehr. Der freie Wechsel zwischen den drei Antwort-LLMs
-   (OpenAI-mini, GPT-4o, Mistral) findet ausschließlich in der
+   Das Frontend bietet bewusst **nur die Produktiv-Pipeline** an
+   (PyMuPDF4LLM + Header+Recursive 800 + `text-embedding-3-small` + MMR +
+   `gpt-4o-mini`, voller ~5.100-Seiten-Korpus) — kein Pipeline-Auswahlfeld
+   mehr. Die früher zusätzlich wählbare **Best-of-Breed**-Pipeline (siehe
+   `docs/BEST_OF_BREED.md`) wurde aus `app.py::PIPELINES` entfernt: Sie
+   bräuchte `vectorstore_full_custom/`, das `scripts/ingest.py` nicht mit
+   aufbaut und für das es kein schnelles Setup-Skript gibt — ohne
+   vorherigen manuellen Build hätte die Auswahl im Frontend einen
+   automatischen, aber **ca. 5-stündigen** Unstructured-`hi_res`-Build
+   ausgelöst (siehe `docs/PARSER.md`). Der freie Wechsel zwischen den drei
+   Antwort-LLMs (OpenAI-mini, GPT-4o, Mistral) findet ausschließlich in der
    RAGAS-Studie statt, siehe `docs/LLM.md`. Die einzelnen
    Demo-Korpus-Vergleichsstudien (Parser/Chunking/Embedding/Retrieval, siehe
    unten) sind über die App ebenfalls **nicht** live auswählbar — sie laufen

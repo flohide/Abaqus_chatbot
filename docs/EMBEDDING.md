@@ -101,8 +101,8 @@ Ergebnisse landen in `eval_results/embedding_ragas_{raw,summary}_<timestamp>.{cs
 
 Interaktiv vergleichbar über [`docs/dashboard.html`](dashboard.html) (Tab
 "Embedding"). Im Streamlit-Frontend (`app.py`) sind die sieben
-Embedding-Modelle dagegen nicht live wählbar — dort steht nur die
-Pipeline-Wahl (Produktiv/Best-of-Breed) zur Verfügung, siehe `README.md`.
+Embedding-Modelle dagegen nicht live wählbar — dort läuft ausschließlich
+die feste Produktiv-Pipeline, siehe `README.md`.
 
 ## Ergebnisse
 

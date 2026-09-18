@@ -1,7 +1,13 @@
 #!/usr/bin/env python
-"""Streamlit-Frontend: klassische Chat-Oberfläche mit Auswahl zwischen der
-Produktiv-Pipeline und der Best-of-Breed-Pipeline (siehe docs/BEST_OF_BREED.md).
-Das Antwort-LLM ist je Pipeline fest vorgegeben, nicht separat wählbar.
+"""Streamlit-Frontend: klassische Chat-Oberfläche für die Produktiv-Pipeline.
+
+Bietet bewusst nur die Produktiv-Pipeline an, keine Pipeline-Auswahl mehr:
+Die Best-of-Breed-Pipeline (siehe docs/BEST_OF_BREED.md) braucht
+`vectorstore_full_custom/`, das `scripts/ingest.py` nicht mit aufbaut - ohne
+vorherigen manuellen Build würde die erste Auswahl im Frontend einen
+automatischen, aber ca. 5-stündigen Unstructured-`hi_res`-Vollkorpus-Build
+auslösen (siehe `ingestion/custom_demo.py::resolve_collection()`). Um das
+zu vermeiden, ist hier nur die sofort nutzbare Produktiv-Pipeline verdrahtet.
 
 Nutzung:
     streamlit run app.py
@@ -21,20 +27,9 @@ from rag_manual_bot.ingestion.custom_demo import resolve_collection  # noqa: E40
 from rag_manual_bot.rag.chain import build_rag_chain  # noqa: E402
 from rag_manual_bot.rag.vectorstore import load_vectorstore  # noqa: E402
 
-# Die wählbaren Gesamt-Pipelines (siehe docs/BEST_OF_BREED.md) - jede legt
-# Parser, Chunking, Embedding, Retrieval-Strategie UND Antwort-LLM fest.
-# Best-of-Breed wird nur noch auf dem vollen ~5.100-Seiten-Produktivkorpus
-# angeboten - die RAGAS-Validierung (docs/BEST_OF_BREED.md) läuft weiterhin
-# auf dem 53-Seiten-Demo-Korpus, eine offizielle Vollkorpus-RAGAS-Auswertung
-# ist bewusst nicht Teil dieser Arbeit; die
-# anfängliche ~53-Seiten-Demo-Korpus-Chat-Variante
-# (scripts/build_best_of_breed_demo.py) war nur ein Zwischenschritt zur
-# Pipeline-Auswahl und ist hier entfernt.
-# GPT-4o ist bei Best-of-Breed fest hinterlegt, weil es dort das mit Abstand
-# staerkste Antwort-LLM ist (⌀ 0.863 vs. gpt-4o-mini 0.821 vs. Mistral 0.772,
-# RAGAS/Claude-Richter, eval_results/best_of_breed_raw_20260915_094906.csv)
-# - anders als auf der Produktiv-Pipeline, wo gpt-4o-mini knapp vorne liegt
-# (siehe docs/LLM.md).
+# Einzige angebotene Pipeline (siehe Moduldocstring, warum Best-of-Breed
+# hier bewusst nicht mehr zur Wahl steht). Struktur bleibt ein Dict, damit
+# _get_chain()/die Komponenten-Anzeige unverändert bleiben können.
 PIPELINES = {
     "Produktiv (voller Korpus, ~5.100 Seiten)": {
         "corpus": "full",
@@ -49,21 +44,6 @@ PIPELINES = {
             ("Embedding", "text-embedding-3-small"),
             ("Retrieval", "MMR"),
             ("LLM", settings.llm_model),
-        ],
-    },
-    "Best-of-Breed (voller Korpus, ~5.100 Seiten)": {
-        "corpus": "full",
-        "parser": "unstructured",
-        "chunking": "semantic",
-        "embedding": "text-embedding-3-large",
-        "retrieval": "rerank",
-        "llm": "gpt4o",
-        "components": [
-            ("Parser", "Unstructured"),
-            ("Chunking", "Semantic"),
-            ("Embedding", "text-embedding-3-large"),
-            ("Retrieval", "Rerank (Cross-Encoder)"),
-            ("LLM", settings.gpt4o_model),
         ],
     },
 }
@@ -120,11 +100,13 @@ def _format_sources(source_documents) -> str:
 
 st.set_page_config(page_title="Abaqus Handbuch-Chatbot", page_icon="🛠️", layout="centered")
 
+pipeline_label = next(iter(PIPELINES))
+pipeline = PIPELINES[pipeline_label]
+
 with st.sidebar:
     st.header("Einstellungen")
 
-    pipeline_label = st.radio("Pipeline", list(PIPELINES), index=0)
-    pipeline = PIPELINES[pipeline_label]
+    st.caption(f"**Pipeline:** {pipeline_label}")
     st.caption(
         "  \n".join(f"**{label}:** {value}" for label, value in pipeline["components"])
     )
