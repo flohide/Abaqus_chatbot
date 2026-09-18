@@ -96,8 +96,9 @@ Frage nicht abdeckt.
 Über diese Grundfunktion hinaus ist jede Komponente der Verarbeitungspipeline
 -- Parser, Chunking, Embedding, Retrieval und Antwort-LLM -- bewusst
 austauschbar gestaltet. Das erlaubt es, für jede Komponente empirisch zu
-prüfen, welche Variante die beste Antwortqualität liefert.
-
+prüfen, welche Variante die beste Antwortqualität liefert. Es werden insgesamt drei LLM-Varianten als Antwortgenerator getestet, darunter zwei OpenAI-Modelle
+(\texttt{gpt-4o-mini} und \texttt{gpt-4o}) sowie ein Mistral-Modell
+(\texttt{mistral-small-latest}). Neben den einzelnen Komponenten der Pipeline, soll besonders der Vergleich der Modellgrößen untersucht werden, um die Frage zu beantworten, ob ein größeres Modell automatisch bessere Antworten liefert.
 % =====================================================================
 \section{Vorgehen}
 \label{sec:vorgehen}
@@ -119,7 +120,7 @@ sondern nachträglich auch empirisch geprüft.
 Jede der sechs Vergleichsstudien variiert genau eine Dimension, während alle
 übrigen Pipeline-Stufen auf dem jeweiligen Produktiv-Default fixiert bleiben.
 Ziel ist es, gemessene Effekte einzelnen Ursachen zurechenbar zu halten,
-statt sie in einer vollen Kombinatorik zu vermischen, da mit jeweils vier bis sieben Varianten eine vollständige Kombinatorik zu aufwändig wäre.
+statt sie in einer vollen Kombinatorik zu vermischen, da mit jeweils drei bis sieben Varianten eine vollständige Kombinatorik zu aufwändig wäre.
 Wechselwirkungen zwischen mehreren gleichzeitig veränderten Dimensionen werden dadurch nicht
 erfasst und werden erst im abschließenden Best-of-Breed-Experiment
 (Abschnitt~\ref{sec:best-of-breed}) sichtbar.
@@ -134,7 +135,7 @@ Korpus mit geschätzt mehreren Stunden Laufzeit nicht praktikabel wäre --
 Docling ist mit warmem Modell-Cache zwar ebenfalls deutlich langsamer als
 PyMuPDF4LLM, mit geschätzt rund einer Stunde für den vollen Korpus aber
 grundsätzlich machbar (siehe \texttt{docs/PARSER.md}). Zusätzlich wären auch RAGAS-Läufe mit LLM-Richter über
-mehrere Kombinationen hinweg  auf dem vollen Korpus zeit- und
+mehrere Kombinationen hinweg auf dem vollen Korpus zeit- und
 kostenintensiv. Um trotz der reduzierten Größe aussagekräftig zu bleiben,
 wurde der Demo-Korpus gezielt aus genau den Inhaltstypen zusammengesetzt,
 die sich zuvor als unterschiedlich schwierig erwiesen hatten -- darunter
@@ -457,7 +458,7 @@ Kontext inhaltlich abgeglichen werden.
 \begin{itemize}
     \item Fester 12-Fragen-Datensatz mit Referenzantworten (\texttt{eval/dataset.py}), deckt alle vier Handbuch-Themenbereiche ab
     \item Gleicher Demo-Korpus und gleiches Fragenset über alle sechs Studien -- Vergleichbarkeit zwischen den Studien
-    \item Die vier Pipeline-Stufen-Vergleiche (Parser, Chunking, Embedding, Retrieval) laufen mit fest auf \texttt{gpt-4o-mini} fixiertem Antwort-LLM und werden auch von \texttt{gpt-4o-mini} als Richter bewertet -- da das Antwort-LLM dort für alle verglichenen Varianten konstant bleibt, ist ein Self-Preference-Bias ausgeschlossen; ergänzend wurden die Ergebnisse für Retrieval und Embedding stichprobenartig gegen ein zweites, größeres Richtermodell (Mistral Large) validiert, ohne wesentliche Abweichungen zum primären Richter
+    \item Die vier Pipeline-Stufen-Vergleiche (Parser, Chunking, Embedding, Retrieval) laufen mit fest auf \texttt{gpt-4o-mini} fixiertem Antwort-LLM und werden auch von \texttt{gpt-4o-mini} als Richter bewertet -- da das Antwort-LLM dort für alle verglichenen Varianten konstant bleibt, ist ein Self-Preference-Bias ausgeschlossen; 
     \item Der Antwort-LLM-Vergleich selbst (GPT-4o-mini, Mistral \texttt{mistral-small-latest}, GPT-4o) sowie das Best-of-Breed-Experiment testen gezielt mehrere Antwort-LLMs gegeneinander; da hier Modelle unterschiedlicher Anbieter direkt gegeneinander antreten, wird als Richter ein von allen Kandidaten unabhängiges Modell eingesetzt (Claude Sonnet 5, Anthropic)
     \item Gesamtumfang: 30 Kombinationen $\times$ 12 Fragen $\times$ 5 Metriken $=$ 1.800 Einzel-Scores
     \item Reproduzierbar über \texttt{scripts/evaluate\_*\_ragas.py}
@@ -495,10 +496,7 @@ gegenüber der Baseline (0,799 auf 0,746); mit GPT-4o-mini sinken sowohl
 Faithfulness (0,906 auf 0,896) als auch FactualCorrectness (0,508 auf
 0,479). Innerhalb von Best-of-Breed ist GPT-4o zugleich das mit Abstand
 stärkste Antwort-LLM ($\varnothing$ 0,863, vor GPT-4o-mini mit 0,821 und
-Mistral mit 0,772). Die methodische Kernaussage: Einzelverbesserungen
-addieren sich nicht automatisch zu einer gleichmäßigen Verbesserung --
-jede Kombination muss selbst gemessen werden. Details in
-\texttt{docs/dashboard.html}, Tab "Best-of-Breed".
+Mistral mit 0,772).
 
 % =====================================================================
 \section{Bekannte Grenzen, Ausblick und Fazit}
@@ -508,8 +506,6 @@ jede Kombination muss selbst gemessen werden. Details in
 \subsection{Bekannte Grenzen und Ausblick}
 
 \begin{itemize}
-    \item Inkrementelles Ingestion-Update: Ein gezielter Fix ergänzt einen Datei-Fingerabdruck (SHA-256 je PDF, gespeichert in einem Manifest neben der Collection); seitdem verarbeitet jeder Ingestion-Lauf nur noch neue oder inhaltlich geänderte PDFs neu, entfernt gelöschte Dateien aus der Collection und überspringt unveränderte Dateien vollständig -- ein Lauf ohne Änderungen ist damit ein reiner No-op ohne API-Kosten
-    \item Seitenbasiertes Header-Splitting: Ein gezielter Fix führt Abschnitte, die ohne neue Überschrift über eine Seitengrenze laufen, inzwischen mit dem vorigen Abschnitt zusammen (die Seitenangabe wird dann zu einem Bereich); der PDF-Deep-Link zeigt bei solchen zusammengeführten Chunks aber weiterhin nur auf die Startseite, nicht auf eine ggf.\ relevantere Folgeseite
     \item Speicherumfang bewusst begrenzt: aktuell 4 von 21 verfügbaren Abaqus-2017-Handbüchern eingelesen ($\sim$5.100 von $\sim$21.800 Seiten), um Ingestion-Dauer und Kosten für Entwicklung/Tests gering zu halten
     \item Vergleichsumfang der vier Einzeldimensionen auf den Demo-Korpus beschränkt: Die Parser-, Chunking-, Embedding- und Retrieval-Vergleiche laufen ausschließlich auf dem $\sim$53-Seiten-Demo-Korpus, nicht auf dem vollen Produktivkorpus -- wegen der Laufzeit von Unstructured (\texttt{hi\_res}) und Semantic Chunking auf $\sim$5.100 Seiten wurde eine Ausweitung im Rahmen dieser Abgabe bewusst nicht mehr durchgeführt. Das gilt auch für das Best-of-Breed-Experiment selbst, dessen Ergebnisse (Abschnitt~\ref{sec:best-of-breed}) sich ebenfalls auf den Demo-Korpus beziehen
 \end{itemize}
@@ -548,10 +544,7 @@ pragmatischste Empfehlung ab: mindestens Cross-Encoder-Reranking statt MMR
 einsetzen -- der größte Einzelgewinn bei geringstem Umbauaufwand.
 Innerhalb der Best-of-Breed-Pipeline erweist sich GPT-4o zudem als das mit
 Abstand stärkste Antwort-LLM ($\varnothing$ 0,863 gegenüber 0,821 für
-GPT-4o-mini und 0,772 für Mistral); die Produktiv-App bietet Best-of-Breed
-dementsprechend nur auf dem vollen Produktivkorpus und standardmäßig mit
-GPT-4o als Antwort-LLM an, trotz dessen höherer Kosten pro Token gegenüber
-dem Produktiv-Default \texttt{gpt-4o-mini}.
+GPT-4o-mini und 0,772 für Mistral). Der Vergleich zwischen \texttt{gpt4o-mini} und \texttt{gpt4o} zeigt, dass ein größeres Modell nicht automatisch bessere Antworten liefert -- die Unterschiede sind in der Praxis marginal, aber die Kosten pro Token deutlich höher. 
 
 Die in Abschnitt~\ref{sec:grenzen} genannte Grenze des auf den Demo-Korpus
 beschränkten Vergleichsumfangs -- die auch für das Best-of-Breed-Experiment
