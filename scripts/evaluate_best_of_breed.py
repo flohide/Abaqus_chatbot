@@ -15,7 +15,7 @@ Voraussetzung: die Best-of-Breed-Collection muss bereits existieren
 `chunking_demo_header_recursive_800` (python scripts/build_chunking_demo_corpus.py
 header_recursive_800). MISTRAL_API_KEY muss in .env gesetzt sein.
 
-Standard-LLMs (ohne --llms): OpenAI, Mistral, GPT-4o.
+Standard-LLMs (ohne --llms): OpenAI, Mistral (`mistral-small-latest`), GPT-4o.
 
 Nutzung:
     python scripts/evaluate_best_of_breed.py

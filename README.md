@@ -28,7 +28,7 @@ vs. BM25-Hybrid) inkl. RAGAS-Evaluation: [`docs/RETRIEVAL.md`](docs/RETRIEVAL.md
 Best-of-Breed: Kombination der vier Einzelsieger gegen die
 Produktiv-Baseline: [`docs/BEST_OF_BREED.md`](docs/BEST_OF_BREED.md)
 
-Antwort-LLM-Vergleich (OpenAI-mini vs. Mistral vs. GPT-4o, über denselben
+Antwort-LLM-Vergleich (OpenAI-mini vs. Mistral (`mistral-small-latest`) vs. GPT-4o, über denselben
 Hub wie OpenAI) inkl. RAGAS-Evaluation: [`docs/LLM.md`](docs/LLM.md)
 
 Quantitative RAGAS-Evaluation (4 Parser, Antwort-LLM fest `gpt-4o-mini`,
@@ -183,7 +183,7 @@ MISTRAL_MODEL=mistral-small-latest
    vorherigen manuellen Build hätte die Auswahl im Frontend einen
    automatischen, aber **ca. 5-stündigen** Unstructured-`hi_res`-Build
    ausgelöst (siehe `docs/PARSER.md`). Der freie Wechsel zwischen den drei
-   Antwort-LLMs (OpenAI-mini, GPT-4o, Mistral) findet ausschließlich in der
+   Antwort-LLMs (OpenAI-mini, GPT-4o, Mistral (`mistral-small-latest`)) findet ausschließlich in der
    RAGAS-Studie statt, siehe `docs/LLM.md`. Die einzelnen
    Demo-Korpus-Vergleichsstudien (Parser/Chunking/Embedding/Retrieval, siehe
    unten) sind über die App ebenfalls **nicht** live auswählbar — sie laufen

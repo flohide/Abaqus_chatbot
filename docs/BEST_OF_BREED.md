@@ -52,7 +52,7 @@ Ergebnisse landen in `eval_results/best_of_breed_{raw,summary}_<timestamp>.{csv,
 
 ## Ergebnisse
 
-Lauf: 2 Pipelines × 3 LLMs (GPT-4o-mini, Mistral, GPT-4o — siehe
+Lauf: 2 Pipelines × 3 LLMs (GPT-4o-mini, Mistral `mistral-small-latest`, GPT-4o — siehe
 [`LLM.md`](LLM.md)) = 6 Kombinationen × 12 Fragen = 72 Instanzen × 5
 Metriken = 360 Einzel-Scores, **0 Fehler, 0 fehlende Werte**. Rohdaten:
 [`eval_results/best_of_breed_raw_20260915_094906.csv`](../eval_results/best_of_breed_raw_20260915_094906.csv)

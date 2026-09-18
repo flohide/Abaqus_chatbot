@@ -458,7 +458,7 @@ Kontext inhaltlich abgeglichen werden.
     \item Fester 12-Fragen-Datensatz mit Referenzantworten (\texttt{eval/dataset.py}), deckt alle vier Handbuch-Themenbereiche ab
     \item Gleicher Demo-Korpus und gleiches Fragenset über alle sechs Studien -- Vergleichbarkeit zwischen den Studien
     \item Die vier Pipeline-Stufen-Vergleiche (Parser, Chunking, Embedding, Retrieval) laufen mit fest auf \texttt{gpt-4o-mini} fixiertem Antwort-LLM und werden auch von \texttt{gpt-4o-mini} als Richter bewertet -- da das Antwort-LLM dort für alle verglichenen Varianten konstant bleibt, ist ein Self-Preference-Bias ausgeschlossen; ergänzend wurden die Ergebnisse für Retrieval und Embedding stichprobenartig gegen ein zweites, größeres Richtermodell (Mistral Large) validiert, ohne wesentliche Abweichungen zum primären Richter
-    \item Der Antwort-LLM-Vergleich selbst (GPT-4o-mini, Mistral, GPT-4o) sowie das Best-of-Breed-Experiment testen gezielt mehrere Antwort-LLMs gegeneinander; da hier Modelle unterschiedlicher Anbieter direkt gegeneinander antreten, wird als Richter ein von allen Kandidaten unabhängiges Modell eingesetzt (Claude Sonnet 5, Anthropic)
+    \item Der Antwort-LLM-Vergleich selbst (GPT-4o-mini, Mistral \texttt{mistral-small-latest}, GPT-4o) sowie das Best-of-Breed-Experiment testen gezielt mehrere Antwort-LLMs gegeneinander; da hier Modelle unterschiedlicher Anbieter direkt gegeneinander antreten, wird als Richter ein von allen Kandidaten unabhängiges Modell eingesetzt (Claude Sonnet 5, Anthropic)
     \item Gesamtumfang: 30 Kombinationen $\times$ 12 Fragen $\times$ 5 Metriken $=$ 1.800 Einzel-Scores
     \item Reproduzierbar über \texttt{scripts/evaluate\_*\_ragas.py}
 \end{itemize}
@@ -484,7 +484,7 @@ Das abschließende sechste Experiment kombiniert die vier Einzelsieger der
 vorigen Vergleiche zum Zeitpunkt ihrer Ermittlung (Unstructured + Semantic
 Chunking + \texttt{text-embedding-3-large} + Rerank) zu einer
 Gesamt-Pipeline und testet sie auf dem Demo-Korpus über die drei
-Antwort-LLMs (GPT-4o-mini, Mistral, GPT-4o) gegen die Produktiv-Baseline,
+Antwort-LLMs (GPT-4o-mini, Mistral \texttt{mistral-small-latest}, GPT-4o) gegen die Produktiv-Baseline,
 bewertet durch den in Abschnitt~\ref{sec:validierung} beschriebenen
 unabhängigen Richter. Im Durchschnitt über alle drei Antwort-LLMs und
 fünf Metriken schlägt Best-of-Breed die Baseline deutlich ($\varnothing$
@@ -539,7 +539,7 @@ Best-of-Breed-Experiment: Die Kombination der vier jeweils besten
 Einzelkomponenten schlägt die Produktiv-Baseline im Durchschnitt über alle
 drei getesteten Antwort-LLMs und alle fünf Metriken deutlich
 ($+$14,4\,\%), jedoch nicht bei jeder Einzelmetrik gleichermaßen -- mit
-Mistral und, geringfügig, auch mit GPT-4o-mini als Antwort-LLM sinkt die
+Mistral (\texttt{mistral-small-latest}) und, geringfügig, auch mit GPT-4o-mini als Antwort-LLM sinkt die
 Faithfulness gegenüber der Baseline leicht. Einzelverbesserungen addieren
 sich also nicht automatisch zu einer gleichmäßigen Verbesserung, und selbst
 ein neuer Gesamtsieger ersetzt nicht die Notwendigkeit, jede Kombination

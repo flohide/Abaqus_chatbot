@@ -87,7 +87,7 @@ per RAGAS gegen Alternativen evaluiert wurden (3.2, Details in Abschnitt 12).
 | **Chunking** | Header+Recursive 800 | 6 Strategien verglichen, u. a. Semantic Chunking — [`docs/CHUNKING.md`](CHUNKING.md), Abschnitt 12.4 |
 | **Embeddings** | `text-embedding-3-small` | 7 Modelle verglichen (3 OpenAI + 4 lokal) — [`docs/EMBEDDING.md`](EMBEDDING.md), Abschnitt 12.5 |
 | **Retrieval-Strategie** | MMR (`k=5`, `fetch_k=20`) | 4 Strategien verglichen (Similarity, Rerank, BM25-Hybrid) — [`docs/RETRIEVAL.md`](RETRIEVAL.md), Abschnitt 12.6 |
-| **Antwort-LLM** | `gpt-4o-mini` | 3 Modelle verglichen (OpenAI-mini, GPT-4o, Mistral) — [`docs/LLM.md`](LLM.md), Abschnitt 12.8 |
+| **Antwort-LLM** | `gpt-4o-mini` | 3 Modelle verglichen (OpenAI-mini, GPT-4o, Mistral `mistral-small-latest`) — [`docs/LLM.md`](LLM.md), Abschnitt 12.8 |
 
 Die Kombination der fünf Einzelsieger gegen die Produktiv-Baseline:
 [`docs/BEST_OF_BREED.md`](BEST_OF_BREED.md), Abschnitt 12.7.
@@ -659,7 +659,7 @@ gewollter Vorgang statt einem Hänger aussähe. Um das zu vermeiden, wurde
 die Pipeline-Auswahl komplett entfernt; die Best-of-Breed-Ergebnisse aus
 12.7/`docs/BEST_OF_BREED.md` bleiben davon unberührt gültig, sind über die
 App aber nicht mehr erreichbar. Der freie Wechsel zwischen den drei
-Antwort-LLMs (OpenAI-mini, GPT-4o, Mistral) bleibt ausschließlich der
+Antwort-LLMs (OpenAI-mini, GPT-4o, Mistral `mistral-small-latest`) bleibt ausschließlich der
 RAGAS-Studie (Abschnitt 12.8, `docs/LLM.md`) vorbehalten. Die einzelnen
 Demo-Korpus-Vergleichsstudien (Parser 12.2–12.3, Chunking 12.4, Embedding
 12.5, Retrieval 12.6) sind über die App ebenfalls nicht live auswählbar —
@@ -692,7 +692,7 @@ def get_llm(provider: str = "openai") -> BaseChatModel:
 Contextualize- und Answer-Schritt der LCEL-Kette durch (Abschnitt 5.3) —
 Retrieval, Prompts und Wissensbasis bleiben unverändert, sodass sich
 Antwortqualität und -stil zwischen den Modellen sauber vergleichen lassen.
-Mistral läuft über einen separaten API-Key (`MISTRAL_API_KEY`), da das
+Mistral (`mistral-small-latest`) läuft über einen separaten API-Key (`MISTRAL_API_KEY`), da das
 Hochschul-Gateway kein Mistral-Modell proxied (geprüft über `GET
 /v1/models`). Im aktuellen `app.py` ist Mistral gar nicht mehr wählbar (siehe
 oben, `PIPELINES` bietet nur `openai`/`gpt4o` an) — erreichbar ist der
@@ -866,7 +866,7 @@ sonst verwendeten `gpt-4o-mini` (Self-Preference-Bias-Risiko, siehe 12.8).
 Ergebnis: Die Best-of-Breed-Pipeline schlägt die Baseline im Durchschnitt
 über alle drei LLMs deutlich (⌀ 0,819 vs. 0,716, **+14,4 %**), allerdings
 nicht bei jeder Einzelmetrik und jedem LLM gleichermaßen — mit GPT-4o
-gewinnt Best-of-Breed alle fünf Metriken, mit Mistral und, geringfügig,
+gewinnt Best-of-Breed alle fünf Metriken, mit Mistral (`mistral-small-latest`) und, geringfügig,
 mit GPT-4o-mini sinkt die Faithfulness gegenüber der Baseline. Innerhalb
 von Best-of-Breed ist GPT-4o mit Abstand das stärkste Antwort-LLM (⌀ 0,863
 vor GPT-4o-mini 0,821 und Mistral 0,772) — entsprechend war GPT-4o dort
@@ -892,7 +892,7 @@ das derselben Familie wie zwei der drei Kandidaten angehören würde
 (Self-Preference-Bias-Risiko).
 
 Ergebnis: **GPT-4o-mini und GPT-4o liegen unter dem unabhängigen Richter
-praktisch gleichauf** (⌀ 0,741 vs. 0,739), Mistral bleibt mit 0,662 deutlich
+praktisch gleichauf** (⌀ 0,741 vs. 0,739), Mistral (`mistral-small-latest`) bleibt mit 0,662 deutlich
 dahinter. Überraschend dabei: Mistral gewinnt trotz niedrigstem Gesamtscore
 die AnswerRelevancy-Einzelmetrik. Details: [`docs/LLM.md`](LLM.md).
 

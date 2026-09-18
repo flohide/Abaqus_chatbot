@@ -9,7 +9,7 @@ relative Rangfolge kaum verzerren (siehe docs/RAGAS.md).
 Der Antwort-LLM-Vergleich (docs/LLM.md) und Best-of-Breed
 (docs/BEST_OF_BREED.md) laufen dagegen bewusst mit einem unabhaengigen
 Claude-Richter (provider="anthropic") - dort treten OpenAI-Modelle direkt
-gegen Mistral an, und ein Richter aus der OpenAI-Familie waere selbst
+gegen Mistral (mistral-small-latest) an, und ein Richter aus der OpenAI-Familie waere selbst
 Kandidat und Richter zugleich (Self-Preference-Bias, empirisch bestaetigt:
 siehe Projektverlauf - GPT-4os Vorsprung schrumpfte bzw. kehrte sich unter
 dem unabhaengigen Richter um). Claude ist bei keinem der Vergleiche selbst

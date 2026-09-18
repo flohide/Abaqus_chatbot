@@ -286,8 +286,8 @@ def run_best_of_breed_evaluation(
         baseline_dir, baseline_collection = settings.chunking_demo_vectorstore_dir, RETRIEVAL_BASE_COLLECTION
 
     # Unabhaengiger Claude-Richter: hier treten OpenAI-Modelle direkt gegen
-    # Mistral an, ein Richter aus der OpenAI-Familie waere Kandidat und
-    # Richter zugleich (siehe eval/metrics.py).
+    # Mistral (mistral-small-latest) an, ein Richter aus der OpenAI-Familie
+    # waere Kandidat und Richter zugleich (siehe eval/metrics.py).
     metrics = build_judge_metrics(provider="anthropic")
 
     all_records: list[dict] = []
@@ -339,7 +339,7 @@ def run_llm_evaluation(
     log = on_progress or (lambda msg: None)
 
     # Unabhaengiger Claude-Richter: das ist der eigentliche LLM-Vergleich
-    # (OpenAI vs. Mistral vs. GPT-4o), ein Richter aus der OpenAI-Familie
+    # (OpenAI vs. Mistral (mistral-small-latest) vs. GPT-4o), ein Richter aus der OpenAI-Familie
     # waere hier Kandidat und Richter zugleich (siehe eval/metrics.py).
     metrics = build_judge_metrics(provider="anthropic")
 

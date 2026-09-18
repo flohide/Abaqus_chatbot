@@ -87,7 +87,8 @@ verglichene Variable ist (`eval/metrics.py::build_judge_metrics(provider=...)`):
   **relative** Rangfolge kaum verzerren.
 - **Unabhängiger Richter, Claude Sonnet 5** (`provider="anthropic"`) für
   [`LLM.md`](LLM.md) und [`BEST_OF_BREED.md`](BEST_OF_BREED.md): Dort treten
-  OpenAI-Modelle direkt als Kandidaten gegen Mistral an — ein Richter aus der
+  OpenAI-Modelle direkt als Kandidaten gegen Mistral (`mistral-small-latest`)
+  an — ein Richter aus der
   OpenAI-Familie wäre hier Kandidat und Richter zugleich. Claude gehört zu
   keiner der bewerteten Antwort-LLM-Familien und ist selbst nie Kandidat.
   Kostenabwägung: Claude Sonnet 5 kostet pro Token ca. 20–25× mehr als

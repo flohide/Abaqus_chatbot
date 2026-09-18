@@ -193,7 +193,7 @@
         <strong>GPT-4o-mini-Richter</strong> — Antwort-LLM und Richter sind dort identisch, aber
         alle verglichenen Varianten trifft das gleichermaßen, verzerrt also nicht die relative
         Rangfolge. Der eigentliche Antwort-LLM-Vergleich (3 Varianten:
-        GPT-4o-mini, Mistral, GPT-4o laufen dagegen bewusst mit einem unabhängigen
+        GPT-4o-mini, Mistral (<code>mistral-small-latest</code>), GPT-4o laufen dagegen bewusst mit einem unabhängigen
         <strong>Claude-Richter</strong> (<code>claude-sonnet-5</code>, Anthropic) statt
         GPT-4o-mini — dort treten OpenAI-Modelle direkt gegen Mistral an, ein Richter aus der
         OpenAI-Familie wäre Kandidat und Richter zugleich (Self-Preference-Bias-Risiko, siehe
@@ -421,7 +421,7 @@
   };
 
   const BEST_OF_BREED = {
-    fixedNote: "Korpus: Demo-Korpus (~53 Seiten). Baseline (Produktiv): PyMuPDF4LLM + Header+Recursive 800 + text-embedding-3-small + MMR. Best-of-Breed: Unstructured + Semantic Chunking + text-embedding-3-large + Rerank. Beide Pipelines je über drei Antwort-LLMs (GPT-4o-mini, Mistral, GPT-4o).",
+    fixedNote: "Korpus: Demo-Korpus (~53 Seiten). Baseline (Produktiv): PyMuPDF4LLM + Header+Recursive 800 + text-embedding-3-small + MMR. Best-of-Breed: Unstructured + Semantic Chunking + text-embedding-3-large + Rerank. Beide Pipelines je über drei Antwort-LLMs (GPT-4o-mini, Mistral (mistral-small-latest), GPT-4o).",
     categories: [
       { key: "best_of_breed", label: "Best-of-Breed" },
       { key: "baseline", label: "Baseline (Produktiv)" },
